@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>EPSS V4 vs V5 Beta — Analyst Comparison Report</title>
+  <title>EPSS V4 vs V5 Beta Comparison Report — 2026-05-22</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
   <link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.bootstrap5.min.css">
   <style>
@@ -80,7 +80,10 @@
       <span class="badge-v5" style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;"></span>
       V5 Beta — Analyst Report
     </span>
-    <span id="built-at" class="text-secondary"></span>
+    <span class="d-flex align-items-center gap-3">
+      <span id="score-date-nav" class="text-secondary" style="font-size:0.7rem;"></span>
+      <span id="built-at" class="text-secondary"></span>
+    </span>
   </div>
 </nav>
 
@@ -89,7 +92,7 @@
   <!-- Summary stats -->
   <div id="summary-section" class="section-anchor mb-4">
     <div class="section-title">Executive Summary</div>
-    <div class="section-sub">Score date: 2026-05-22 &nbsp;|&nbsp; Comparing EPSS model versions side by side</div>
+    <div class="section-sub">Score date: 2026-05-22 &nbsp;|&nbsp; Comparing EPSS model versions side by side &nbsp;|&nbsp; <strong>EPSS scores</strong> = estimated probability of exploitation observed in the wild <strong>within the next 30 days</strong> (as of the score date)</div>
     <div class="row g-3" id="stat-cards">
       <div class="col-12 loading-overlay"><div class="spinner-border text-primary"></div> Loading…</div>
     </div>
@@ -108,6 +111,15 @@
     <li class="nav-item"><a class="nav-link" href="#cna-section">By CNA</a></li>
     <li class="nav-item"><a class="nav-link" href="#movers-section">Top Movers</a></li>
   </ul>
+
+  <!-- Threshold crossing reconciliation note -->
+  <div id="threshold-note" class="mb-3" style="display:none;font-size:0.8rem;color:var(--muted);background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:0.75rem 1rem;">
+    <strong>Why "76.28% scored higher" and negative threshold crossings are both correct:</strong>
+    The vast majority of upward-moving CVEs went from one near-zero value to another—small increases well below any operational threshold.
+    Only <span id="note-up-5pct"></span> of the <span id="note-v4-below-5pct"></span> CVEs that were <em>below</em> 5% in V4 crossed above it in V5 (<span id="note-pct-crossed-up"></span>%).
+    Meanwhile, <span id="note-down-5pct"></span> of the <span id="note-v4-above-5pct"></span> CVEs that were <em>above</em> 5% in V4 fell below it in V5 (<span id="note-pct-crossed-down"></span>%).
+    V5 raises the floor and lowers the ceiling simultaneously—resulting in a smaller prioritized backlog at every threshold.
+  </div>
 
   <!-- Score Distribution -->
   <div id="dist-section" class="section-anchor card mb-4">
@@ -129,7 +141,7 @@
   <div id="scatter-section" class="section-anchor card mb-4">
     <div class="card-header">Score Correlation — V4 vs V5 (5,000 sampled CVEs)</div>
     <div class="card-body">
-      <div class="section-sub mb-2">Each point is a CVE. Points above the diagonal line scored <em>higher</em> in V5; below = lower. Colored by CVSS severity.</div>
+      <div class="section-sub mb-2">Each point is a CVE. Points above the diagonal line scored <em>higher</em> in V5; below = lower. Colored by CVSS severity. <strong>Sampling note:</strong> 77% of CVEs have V4 scores below 0.01 and cluster invisibly in the bottom-left corner; the chart uses a proportional stratified sample across 10 score buckets to make the high-score region visible.</div>
       <div class="chart-wrap" style="height:420px;">
         <canvas id="scatterChart"></canvas>
       </div>
@@ -139,9 +151,12 @@
 
   <!-- Delta distribution -->
   <div id="delta-section" class="section-anchor card mb-4">
-    <div class="card-header">Score Shift Distribution (V5 − V4)</div>
+    <div class="card-header d-flex justify-content-between align-items-center">
+      Score Shift Distribution (V5 − V4)
+      <button class="btn btn-sm btn-outline-secondary" id="delta-log-btn" onclick="toggleDeltaLog()">Log Scale</button>
+    </div>
     <div class="card-body">
-      <div class="section-sub mb-2">Distribution of per-CVE score changes. Positive = V5 scored higher, negative = V5 scored lower.</div>
+      <div class="section-sub mb-2">Distribution of per-CVE score changes. Positive = V5 scored higher, negative = V5 scored lower. Vertical line marks the median shift. Log scale recommended — the near-zero bin is ~1,300× taller than edge bins on linear scale. <strong>Note on mean vs. median:</strong> The <em>mean</em> delta is −0.00408 (negative) while the <em>median</em> is +0.00298 (positive) — opposite signs. The mean is pulled down by a long left tail: a smaller number of previously-high-scoring CVEs dropped significantly, while the large mass of near-zero CVEs each gained a small amount.</div>
       <div class="chart-wrap" style="height:280px;">
         <canvas id="deltaChart"></canvas>
       </div>
@@ -150,9 +165,19 @@
 
   <!-- By Severity -->
   <div id="severity-section" class="section-anchor card mb-4">
-    <div class="card-header">Average EPSS Score by CVSS Severity</div>
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span id="severity-header-label">Average EPSS Score by CVSS Severity</span>
+      <button class="btn btn-sm btn-outline-secondary" id="sev-stat-btn" onclick="toggleSevStat()">Show Median</button>
+    </div>
     <div class="card-body">
-      <div class="section-sub mb-2">How V4 and V5 scores compare within each CVSS severity band.</div>
+      <div class="alert mb-3" style="background:rgba(180,83,9,0.08);border:1px solid rgba(180,83,9,0.25);color:#92400E;font-size:0.82rem;">
+        <strong>Key finding — mean and median tell opposite stories for CRITICAL/HIGH:</strong>
+        By <em>mean</em>, V5 lowers CRITICAL (−0.020) and HIGH (−0.003) scores — pulled down by a small number of previously-high-scoring outliers that dropped significantly.
+        By <em>median</em>, V5 <em>raises</em> scores across all four severity bands, including CRITICAL (+0.004) and HIGH (+0.003).
+        The distributions are heavily right-skewed (CRITICAL mean/median ratio ≈ 20×), so the median better represents the typical CVE in each band.
+        Toggle the chart above to compare.
+      </div>
+      <div class="section-sub mb-2">How V4 and V5 scores compare within each CVSS severity band. <span id="cvss-coverage-note" class="text-secondary"></span></div>
       <div class="row g-3">
         <div class="col-lg-7">
           <div class="chart-wrap" style="height:280px;"><canvas id="severityChart"></canvas></div>
@@ -160,7 +185,7 @@
         <div class="col-lg-5">
           <div class="table-responsive">
             <table class="table table-sm table-light" id="severity-table">
-              <thead><tr><th>Severity</th><th>Count</th><th>Avg V4</th><th>Avg V5</th><th>Δ</th></tr></thead>
+              <thead><tr><th>Severity</th><th>Count</th><th>Avg V4</th><th>Avg V5</th><th>Avg Δ</th><th>Med V4</th><th>Med V5</th></tr></thead>
               <tbody id="severity-tbody"></tbody>
             </table>
           </div>
@@ -173,7 +198,12 @@
   <div id="cwe-section" class="section-anchor card mb-4">
     <div class="card-header">By CWE (Top 40 by CVE Count)</div>
     <div class="card-body">
-      <div class="section-sub mb-2">Average EPSS scores grouped by Common Weakness Enumeration. Shows which vulnerability types saw the biggest model changes.</div>
+      <div class="section-sub mb-2">Average EPSS scores grouped by Common Weakness Enumeration. Chart shows top 15 by CVE count, sorted by largest absolute score change. Table (all 40) sorted by delta by default — these 40 CWEs cover ~29.5% of all scored CVEs. <span style="color:var(--muted);">The remaining 70.5% have either no CWE assigned or a CWE outside the top 40.</span></div>
+      <div class="alert mb-3" style="background:rgba(180,83,9,0.08);border:1px solid rgba(180,83,9,0.25);color:#92400E;font-size:0.82rem;">
+        <strong>Systematic downgrade pattern:</strong> V5 substantially de-prioritizes entire vulnerability classes.
+        CWE-434 (Unrestricted Upload) drops by an average of −0.031 per CVE; CWE-94 (Code Injection) by −0.022; CWE-22 (Path Traversal) by −0.009; CWE-918 (SSRF) by −0.009.
+        Teams using EPSS thresholds to triage these vulnerability types should expect a materially smaller V5 prioritized backlog before adopting.
+      </div>
       <div class="row g-3">
         <div class="col-xl-6">
           <div class="chart-wrap" style="height:380px;"><canvas id="cweChart"></canvas></div>
@@ -203,7 +233,7 @@
   <div id="vendor-section" class="section-anchor card mb-4">
     <div class="card-header">By Vendor (Top 30 by CVE Count)</div>
     <div class="card-body">
-      <div class="section-sub mb-2">Vendors with the most CVEs in the dataset and how their scores shifted from V4 to V5.</div>
+      <div class="section-sub mb-2">Vendors with the most CVEs in the dataset and how their scores shifted from V4 to V5. Table sorted by largest absolute delta by default — useful for identifying which vendor portfolios behave most differently between models.</div>
       <div class="row g-3">
         <div class="col-xl-6">
           <div class="chart-wrap" style="height:480px;"><canvas id="vendorChart"></canvas></div>
@@ -224,7 +254,7 @@
   <div id="product-section" class="section-anchor card mb-4">
     <div class="card-header">By Product (Top 50 by CVE Count)</div>
     <div class="card-body">
-      <div class="section-sub mb-2">Products with the most CVEs and their score comparison.</div>
+      <div class="section-sub mb-2">Products with the most CVEs and their score comparison. Sorted by largest absolute delta by default.</div>
       <div class="table-responsive">
         <table id="product-table" class="table table-sm table-light w-100">
           <thead><tr><th>Product</th><th>CVEs</th><th>Avg V4</th><th>Avg V5</th><th>Δ</th><th>Median V4</th><th>Median V5</th></tr></thead>
@@ -238,7 +268,7 @@
   <div id="cna-section" class="section-anchor card mb-4">
     <div class="card-header">By CNA / Assigner (Top 30 by CVE Count)</div>
     <div class="card-body">
-      <div class="section-sub mb-2">CVE Numbering Authorities ranked by volume of published CVEs and how their assigned CVEs scored in each model.</div>
+      <div class="section-sub mb-2">CVE Numbering Authorities ranked by volume of published CVEs and how their assigned CVEs scored in each model. <strong>Note:</strong> "mitre" (~113k CVEs) represents pre-2017 legacy records where MITRE acted as Naming Authority, not as a scoring CNA — these records typically have no CNA-provided CVSS. <strong>V5 Beta status:</strong> The V5 model (v2026.05.12) is a public beta; scores may change before general availability and should be validated against your environment before replacing V4 in production workflows.</div>
       <div class="table-responsive">
         <table id="cna-table" class="table table-sm table-light w-100">
           <thead><tr><th>CNA</th><th>CVEs</th><th>Avg V4</th><th>Avg V5</th><th>Δ</th><th>Median V4</th><th>Median V5</th></tr></thead>
@@ -253,16 +283,53 @@
     <div class="card-header">Top 50 Movers — Largest V4 → V5 Score Changes</div>
     <div class="card-body">
       <div class="section-sub mb-2">CVEs where the model change had the greatest impact on predicted exploitation probability.</div>
-      <div class="table-responsive">
-        <table id="movers-table" class="table table-sm table-light w-100">
-          <thead>
-            <tr>
-              <th>CVE</th><th>Severity</th><th>V4 Score</th><th>V5 Score</th><th>Change</th>
-              <th>CWE</th><th>Vendor</th><th>Product</th><th>CNA</th><th>Description</th>
-            </tr>
-          </thead>
-          <tbody id="movers-tbody"></tbody>
-        </table>
+      <div class="alert mb-3" style="background:rgba(180,83,9,0.08);border:1px solid rgba(180,83,9,0.25);color:#92400E;font-size:0.82rem;">
+        <strong>Model artifact — 2012 antivirus parser cluster:</strong> The upgrades list includes 24 CVEs from CVE-2012-1421 through CVE-2012-1463
+        (antivirus bypass via malformed TAR, ELF, EXE, CAB, Gzip, and ZIP files), all jumping from ≈0.001 to 0.88–0.99 in V5.
+        These share identical description patterns and vendor="n/a".
+        This cluster likely reflects a V5 training signal rather than genuine operational risk change, and should be interpreted with caution.
+        If your environment uses EPSS scores above 0.8 as a hard escalation trigger, audit whether triggering CVEs fall into this pattern before adopting V5.
+      </div>
+      <div class="alert mb-3" style="background:rgba(30,64,175,0.06);border:1px solid rgba(30,64,175,0.2);color:#1e3a8a;font-size:0.82rem;">
+        <strong>Top 3 upgrades are the same vulnerability:</strong> CVE-2024-29823, CVE-2024-29825, and CVE-2024-29826
+        all describe the same unspecified SQL Injection in Ivanti EPM Core server (V4≈0.024, V5≈0.999, Δ≈+0.975).
+        They are filed as separate CVEs but represent one underlying issue — treat them as a single data point for prioritization purposes.
+      </div>
+      <ul class="nav nav-tabs mb-3" id="moversTab" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="tab-up-btn" data-bs-toggle="tab" data-bs-target="#tab-upgrades" type="button" role="tab">
+            ▲ Top 50 Upgrades <span class="badge bg-secondary ms-1" style="background:var(--up-color) !important;" id="up-count"></span>
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="tab-dn-btn" data-bs-toggle="tab" data-bs-target="#tab-downgrades" type="button" role="tab">
+            ▼ Top 50 Downgrades <span class="badge bg-secondary ms-1" style="background:var(--down-color) !important;" id="dn-count"></span>
+          </button>
+        </li>
+      </ul>
+      <div class="tab-content">
+        <div class="tab-pane fade show active" id="tab-upgrades" role="tabpanel">
+          <div class="table-responsive">
+            <table id="movers-up-table" class="table table-sm table-light w-100">
+              <thead><tr>
+                <th>CVE</th><th>Year</th><th>Severity</th><th>V4 Score</th><th>V5 Score</th><th>Change</th>
+                <th>V4 Pctile</th><th>V5 Pctile</th><th>CWE</th><th>Vendor</th><th>CNA</th><th>Description</th>
+              </tr></thead>
+              <tbody id="movers-up-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="tab-pane fade" id="tab-downgrades" role="tabpanel">
+          <div class="table-responsive">
+            <table id="movers-dn-table" class="table table-sm table-light w-100">
+              <thead><tr>
+                <th>CVE</th><th>Year</th><th>Severity</th><th>V4 Score</th><th>V5 Score</th><th>Change</th>
+                <th>V4 Pctile</th><th>V5 Pctile</th><th>CWE</th><th>Vendor</th><th>CNA</th><th>Description</th>
+              </tr></thead>
+              <tbody id="movers-dn-tbody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -274,6 +341,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1/dist/chartjs-plugin-annotation.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
 <script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/2.0.8/js/dataTables.bootstrap5.min.js"></script>
@@ -308,8 +376,8 @@ const fmtPct = v => v !== null && v !== undefined ? v.toFixed(1) + '%' : '—';
 
 function deltaPill(d) {
   if (d === null || d === undefined) return '<span class="delta-pill delta-same">—</span>';
-  const sign = d > 0.0005 ? '+' : (d < -0.0005 ? '' : '±');
-  const cls = d > 0.0005 ? 'delta-up' : (d < -0.0005 ? 'delta-down' : 'delta-same');
+  const sign = d > 0.001 ? '+' : (d < -0.001 ? '' : '±');
+  const cls = d > 0.001 ? 'delta-up' : (d < -0.001 ? 'delta-down' : 'delta-same');
   return `<span class="delta-pill ${cls}">${sign}${d.toFixed(4)}</span>`;
 }
 
@@ -344,6 +412,12 @@ document.querySelectorAll('#section-nav a').forEach(a => {
 // ── Main loader ────────────────────────────────────────────────────────────
 let distChart, distLogMode = false;
 let distData = null;
+let summaryData = null;
+let deltaChart, deltaLogMode = false;
+let deltaData = null;
+let sevChart = null;
+let sevData = null;
+let sevStatMode = 'avg';
 
 async function init() {
   const [summary, dist, scatter, delta, byCwe, byCvss, bySev, byVendor, byProduct, byCna, movers, meta] =
@@ -367,12 +441,15 @@ async function init() {
       'Built: ' + new Date(meta.built_at).toLocaleString();
   }
 
+  summaryData = summary;
   renderSummary(summary);
   distData = dist;
   renderDistribution(dist, false);
   renderScatter(scatter);
-  renderDelta(delta);
-  renderSeverity(bySev);
+  deltaData = delta;
+  renderDelta(delta, false);
+  sevData = bySev;
+  renderSeverity(bySev, sevStatMode);
   renderCwe(byCwe);
   renderCvssComponents(byCvss);
   renderByField('vendor', byVendor, 'vendor');
@@ -383,6 +460,10 @@ async function init() {
 
 // ── Summary cards ─────────────────────────────────────────────────────────
 function renderSummary(d) {
+  // Navbar score date
+  const sdNav = document.getElementById('score-date-nav');
+  if (sdNav && d.score_date) sdNav.textContent = `Data: ${d.score_date}`;
+
   const container = document.getElementById('stat-cards');
   container.innerHTML = `
     <div class="col-6 col-md-4 col-lg-2">
@@ -428,54 +509,82 @@ function renderSummary(d) {
         <div><span class="text-secondary" style="font-size:0.75rem;">SCORE DATE</span><br><span style="font-size:0.85rem;">${d.score_date}</span></div>
         <div><span class="text-secondary" style="font-size:0.75rem;">HIGHER IN V5</span><br><span style="font-size:0.85rem;">${d.count_higher.toLocaleString()}</span></div>
         <div><span class="text-secondary" style="font-size:0.75rem;">LOWER IN V5</span><br><span style="font-size:0.85rem;">${d.count_lower.toLocaleString()}</span></div>
-        <div><span class="text-secondary" style="font-size:0.75rem;">UNCHANGED</span><br><span style="font-size:0.85rem;">${d.count_same.toLocaleString()}</span></div>
+        <div><span class="text-secondary" style="font-size:0.75rem;">UNCHANGED</span><br><span style="font-size:0.85rem;" title="Scores within ±0.001 treated as unchanged">${d.count_same.toLocaleString()} <span style="color:var(--muted);font-size:0.7rem;">±0.001</span></span></div>
         <div><span class="text-secondary" style="font-size:0.75rem;">MAX INCREASE</span><br><span style="font-size:0.85rem;color:${UP_COLOR}">+${d.delta_max}</span></div>
         <div><span class="text-secondary" style="font-size:0.75rem;">MAX DECREASE</span><br><span style="font-size:0.85rem;color:${DOWN_COLOR}">${d.delta_min}</span></div>
+        ${Object.values(d.threshold_crossings || {}).map(t => {
+          const pctUp = t.v4_below ? (t.crossed_up / t.v4_below * 100).toFixed(1) : '';
+          const pctDown = t.v4_above ? (t.crossed_down / t.v4_above * 100).toFixed(1) : '';
+          const upTip = t.v4_below ? `${t.crossed_up.toLocaleString()} of ${t.v4_below.toLocaleString()} CVEs below ${(t.threshold*100).toFixed(0)}% in V4 crossed up` : '';
+          const dnTip = t.v4_above ? `${t.crossed_down.toLocaleString()} of ${t.v4_above.toLocaleString()} CVEs above ${(t.threshold*100).toFixed(0)}% in V4 crossed down` : '';
+          return `<div title="Threshold crossings at ${(t.threshold*100).toFixed(0)}%">
+            <span class="text-secondary" style="font-size:0.75rem;">CROSSED ≥${(t.threshold*100).toFixed(0)}%</span><br>
+            <span style="font-size:0.82rem;">
+              <span style="color:${UP_COLOR}" title="${upTip}">▲ ${t.crossed_up.toLocaleString()}${pctUp ? ` <small>(${pctUp}% of below)</small>` : ''}</span>
+              <span style="color:var(--muted);margin:0 2px;">/</span>
+              <span style="color:${DOWN_COLOR}" title="${dnTip}">▼ ${t.crossed_down.toLocaleString()}${pctDown ? ` <small>(${pctDown}% of above)</small>` : ''}</span>
+            </span>
+          </div>`;
+        }).join('')}
       </div>
     </div>
   `;
+
+  // Show the threshold reconciliation note
+  const noteEl = document.getElementById('threshold-note');
+  if (noteEl) {
+    const t05 = (d.threshold_crossings || {})['0.05'];
+    if (t05 && t05.v4_above && t05.v4_below) {
+      document.getElementById('note-up-5pct').textContent = t05.crossed_up.toLocaleString();
+      document.getElementById('note-v4-below-5pct').textContent = t05.v4_below.toLocaleString();
+      document.getElementById('note-pct-crossed-up').textContent = (t05.crossed_up / t05.v4_below * 100).toFixed(1);
+      document.getElementById('note-down-5pct').textContent = t05.crossed_down.toLocaleString();
+      document.getElementById('note-v4-above-5pct').textContent = t05.v4_above.toLocaleString();
+      document.getElementById('note-pct-crossed-down').textContent = (t05.crossed_down / t05.v4_above * 100).toFixed(1);
+      noteEl.style.display = 'block';
+    }
+  }
+
+  // CVSS coverage disclosure for severity / vector sections
+  if (d.cvss_pct !== undefined) {
+    const el = document.getElementById('cvss-coverage-note');
+    if (el) el.textContent = `${d.cvss_pct}% of CVEs have CVSS data; ${(100 - d.cvss_pct).toFixed(1)}% have no CVSS and are excluded from this breakdown.`;
+  }
 }
 
 // ── Distribution chart ────────────────────────────────────────────────────
 function renderDistribution(dist, logMode) {
   const ctx = document.getElementById('distChart').getContext('2d');
-  const data = {
-    labels: dist.bins.map(b => b.toFixed(2)),
-    datasets: [
-      {
-        label: 'EPSS V4',
-        data: dist.v4,
-        backgroundColor: V4_FILL,
-        borderColor: V4_COLOR,
-        borderWidth: 1.5,
-        fill: true,
-        pointRadius: 0,
-        tension: 0.2,
-        type: 'line',
-      },
-      {
-        label: 'EPSS V5 Beta',
-        data: dist.v5,
-        backgroundColor: V5_FILL,
-        borderColor: V5_COLOR,
-        borderWidth: 1.5,
-        fill: true,
-        pointRadius: 0,
-        tension: 0.2,
-        type: 'line',
-      },
-    ],
+  const v4med = summaryData && summaryData.v4_median;
+  const v5med = summaryData && summaryData.v5_median;
+  const annotations = {};
+  if (v4med != null) annotations.v4med = {
+    type: 'line', scaleID: 'x', value: v4med,
+    borderColor: V4_COLOR, borderWidth: 2, borderDash: [4,3],
+    label: { content: `V4 med: ${v4med}`, display: true, position: 'start', color: V4_COLOR, font: { size: 10 }, backgroundColor: 'rgba(255,255,255,0.8)' },
+  };
+  if (v5med != null) annotations.v5med = {
+    type: 'line', scaleID: 'x', value: v5med,
+    borderColor: V5_COLOR, borderWidth: 2, borderDash: [4,3],
+    label: { content: `V5 med: ${v5med}`, display: true, position: 'end', color: V5_COLOR, font: { size: 10 }, backgroundColor: 'rgba(255,255,255,0.8)' },
   };
   if (distChart) distChart.destroy();
   distChart = new Chart(ctx, {
     type: 'line',
-    data,
+    data: {
+      labels: dist.bins.map(b => b.toFixed(2)),
+      datasets: [
+        { label: 'EPSS V4', data: dist.v4, backgroundColor: V4_FILL, borderColor: V4_COLOR, borderWidth: 1.5, fill: true, pointRadius: 0, tension: 0.2, type: 'line' },
+        { label: 'EPSS V5 Beta', data: dist.v5, backgroundColor: V5_FILL, borderColor: V5_COLOR, borderWidth: 1.5, fill: true, pointRadius: 0, tension: 0.2, type: 'line' },
+      ],
+    },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
       plugins: {
         legend: { position: 'top' },
+        annotation: { annotations },
         tooltip: {
           callbacks: {
             title: items => `Score bin: ${items[0].label}`,
@@ -486,7 +595,7 @@ function renderDistribution(dist, logMode) {
       scales: {
         x: {
           title: { display: true, text: 'EPSS Score' },
-          ticks: { maxTicksLimit: 11, callback: (v, i, vals) => dist.bins[i] !== undefined ? dist.bins[i].toFixed(1) : '' },
+          ticks: { maxTicksLimit: 11, callback: (v, i) => dist.bins[i] !== undefined ? dist.bins[i].toFixed(1) : '' },
         },
         y: {
           type: logMode ? 'logarithmic' : 'linear',
@@ -579,20 +688,22 @@ function renderScatter(points) {
 }
 
 // ── Delta distribution ────────────────────────────────────────────────────
-function renderDelta(delta) {
+function renderDelta(delta, logMode) {
   const ctx = document.getElementById('deltaChart').getContext('2d');
   const colors = delta.bins.map(b => b >= 0 ? UP_COLOR + 'aa' : DOWN_COLOR + 'aa');
-  new Chart(ctx, {
+  const medianDelta = summaryData && summaryData.delta_median;
+  const annotations = {};
+  if (medianDelta != null) annotations.med = {
+    type: 'line', scaleID: 'x', value: medianDelta.toFixed(3),
+    borderColor: '#444', borderWidth: 2, borderDash: [4,3],
+    label: { content: `median Δ: ${medianDelta >= 0 ? '+' : ''}${medianDelta}`, display: true, position: 'end', font: { size: 10 }, backgroundColor: 'rgba(255,255,255,0.85)', color: '#333' },
+  };
+  if (deltaChart) deltaChart.destroy();
+  deltaChart = new Chart(ctx, {
     type: 'bar',
     data: {
       labels: delta.bins.map(b => b.toFixed(2)),
-      datasets: [{
-        label: 'CVE Count',
-        data: delta.counts,
-        backgroundColor: colors,
-        borderColor: colors,
-        borderWidth: 0,
-      }],
+      datasets: [{ label: 'CVE Count', data: delta.counts, backgroundColor: colors, borderColor: colors, borderWidth: 0 }],
     },
     options: {
       responsive: true,
@@ -600,27 +711,50 @@ function renderDelta(delta) {
       animation: false,
       plugins: {
         legend: { display: false },
+        annotation: { annotations },
         tooltip: { callbacks: { title: items => `Δ ≈ ${items[0].label}` } },
       },
       scales: {
         x: { title: { display: true, text: 'Score Change (V5 − V4)' }, ticks: { maxTicksLimit: 11 } },
-        y: { title: { display: true, text: 'CVEs' }, ticks: { callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } },
+        y: {
+          type: logMode ? 'logarithmic' : 'linear',
+          title: { display: true, text: 'CVEs' },
+          ticks: { callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v },
+        },
       },
     },
   });
 }
 
+function toggleDeltaLog() {
+  deltaLogMode = !deltaLogMode;
+  const btn = document.getElementById('delta-log-btn');
+  btn.classList.toggle('btn-primary', deltaLogMode);
+  btn.classList.toggle('btn-outline-secondary', !deltaLogMode);
+  if (deltaData) renderDelta(deltaData, deltaLogMode);
+}
+
 // ── Severity ──────────────────────────────────────────────────────────────
-function renderSeverity(data) {
+function renderSeverity(data, statMode) {
+  statMode = statMode || 'avg';
   const labels = data.map(d => d.severity);
+  const isMedian = statMode === 'median';
+  const v4Key = isMedian ? 'median_v4' : 'avg_v4';
+  const v5Key = isMedian ? 'median_v5' : 'avg_v5';
+  const label = isMedian ? 'Median' : 'Avg';
+
+  document.getElementById('severity-header-label').textContent =
+    `${label} EPSS Score by CVSS Severity`;
+
   const ctx = document.getElementById('severityChart').getContext('2d');
-  new Chart(ctx, {
+  if (sevChart) sevChart.destroy();
+  sevChart = new Chart(ctx, {
     type: 'bar',
     data: {
       labels,
       datasets: [
-        { label: 'V4 Avg', data: data.map(d => d.avg_v4), backgroundColor: V4_COLOR + 'cc', borderColor: V4_COLOR, borderWidth: 1 },
-        { label: 'V5 Avg', data: data.map(d => d.avg_v5), backgroundColor: V5_COLOR + 'cc', borderColor: V5_COLOR, borderWidth: 1 },
+        { label: `V4 ${label}`, data: data.map(d => d[v4Key]), backgroundColor: V4_COLOR + 'cc', borderColor: V4_COLOR, borderWidth: 1 },
+        { label: `V5 ${label}`, data: data.map(d => d[v5Key]), backgroundColor: V5_COLOR + 'cc', borderColor: V5_COLOR, borderWidth: 1 },
       ],
     },
     options: {
@@ -629,7 +763,7 @@ function renderSeverity(data) {
       animation: false,
       plugins: { legend: { position: 'top' } },
       scales: {
-        y: { min: 0, max: 1, title: { display: true, text: 'Avg EPSS Score' } },
+        y: { min: 0, title: { display: true, text: `${label} EPSS Score` } },
       },
     },
   });
@@ -642,13 +776,25 @@ function renderSeverity(data) {
       <td style="color:${V4_COLOR}">${fmt(d.avg_v4)}</td>
       <td style="color:${V5_COLOR}">${fmt(d.avg_v5)}</td>
       <td>${deltaPill(d.avg_delta)}</td>
+      <td style="color:${V4_COLOR};opacity:0.75;">${fmt(d.median_v4)}</td>
+      <td style="color:${V5_COLOR};opacity:0.75;">${fmt(d.median_v5)}</td>
     </tr>
   `).join('');
 }
 
+function toggleSevStat() {
+  sevStatMode = sevStatMode === 'avg' ? 'median' : 'avg';
+  const btn = document.getElementById('sev-stat-btn');
+  btn.textContent = sevStatMode === 'avg' ? 'Show Median' : 'Show Mean';
+  btn.classList.toggle('btn-primary', sevStatMode === 'median');
+  btn.classList.toggle('btn-outline-secondary', sevStatMode === 'avg');
+  if (sevData) renderSeverity(sevData, sevStatMode);
+}
+
 // ── CWE ───────────────────────────────────────────────────────────────────
 function renderCwe(data) {
-  const top15 = data.slice(0, 15);
+  // Chart: top 15 by |avg_delta| (biggest model disagreement), regardless of CVE count
+  const top15 = data.slice().sort((a, b) => Math.abs(b.avg_delta) - Math.abs(a.avg_delta)).slice(0, 15);
   const ctx = document.getElementById('cweChart').getContext('2d');
   new Chart(ctx, {
     type: 'bar',
@@ -687,10 +833,10 @@ function renderCwe(data) {
   `).join('');
 
   $('#cwe-table').DataTable({
-    paging: true, pageLength: 15, order: [[2,'desc']],
+    paging: true, pageLength: 15, order: [[5,'desc']],
     columnDefs: [
       { orderable: false, targets: [1] },
-      { orderSequence: ['desc','asc'], targets: [3,4,5] },
+      { orderSequence: ['desc','asc'], targets: [2,3,4,5] },
     ],
   });
 }
@@ -793,44 +939,61 @@ function renderByField(fieldId, data, fieldKey) {
       <td>${d.count.toLocaleString()}</td>
       <td data-order="${d.avg_v4 ?? -1}">${scoreBar(d.avg_v4, V4_COLOR)}</td>
       <td data-order="${d.avg_v5 ?? -1}">${scoreBar(d.avg_v5, V5_COLOR)}</td>
-      <td data-order="${d.avg_delta ?? 0}">${deltaPill(d.avg_delta)}</td>
+      <td data-order="${Math.abs(d.avg_delta ?? 0)}">${deltaPill(d.avg_delta)}</td>
       <td data-order="${d.median_v4 ?? -1}" style="color:var(--muted);">${fmt(d.median_v4)}</td>
       <td data-order="${d.median_v5 ?? -1}" style="color:var(--muted);">${fmt(d.median_v5)}</td>
     </tr>
   `).join('');
 
+  // Vendor and product: default sort by |delta| (column 4) so most-impacted portfolios appear first
+  const defaultOrder = (fieldId === 'vendor' || fieldId === 'product') ? [[4, 'desc']] : [[1, 'desc']];
   $(`#${fieldId}-table`).DataTable({
     paging: true,
     pageLength: fieldId === 'product' ? 25 : 15,
-    order: [[1, 'desc']],
+    order: defaultOrder,
     columnDefs: [{ orderSequence: ['desc','asc'], targets: [1,2,3,4,5,6] }],
   });
 }
 
 // ── Movers ────────────────────────────────────────────────────────────────
-function renderMovers(data) {
-  const tbody = document.getElementById('movers-tbody');
-  tbody.innerHTML = data.map(d => `
-    <tr>
-      <td><a class="cve-link" href="https://www.cve.org/CVERecord?id=${d.cve}" target="_blank" rel="noopener">${d.cve}</a></td>
-      <td>${sevBadge(d.severity)}</td>
-      <td style="color:${V4_COLOR};font-family:monospace;font-size:0.8rem;">${fmt(d.v4)}</td>
-      <td style="color:${V5_COLOR};font-family:monospace;font-size:0.8rem;">${fmt(d.v5)}</td>
-      <td>${deltaPill(d.delta)}</td>
-      <td><code style="font-size:0.72rem;color:#60a5fa;" title="${d.cwe_name}">${d.cwe || '—'}</code></td>
-      <td style="max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${d.vendor}">${d.vendor || '—'}</td>
-      <td style="max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${d.product}">${d.product || '—'}</td>
-      <td style="font-size:0.72rem;">${d.cna || '—'}</td>
-      <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:0.75rem;color:#94a3b8;" title="${d.description}">${d.description || '—'}</td>
-    </tr>
-  `).join('');
+function moverRow(d) {
+  const fmtPctile = v => v != null ? (v * 100).toFixed(1) + '%' : '—';
+  return `<tr>
+    <td><a class="cve-link" href="https://www.cve.org/CVERecord?id=${d.cve}" target="_blank" rel="noopener">${d.cve}</a></td>
+    <td style="font-size:0.78rem;color:var(--muted);">${d.year || '—'}</td>
+    <td>${sevBadge(d.severity)}</td>
+    <td data-order="${d.v4 ?? -1}" style="color:${V4_COLOR};font-family:monospace;font-size:0.8rem;">${fmt(d.v4)}</td>
+    <td data-order="${d.v5 ?? -1}" style="color:${V5_COLOR};font-family:monospace;font-size:0.8rem;">${fmt(d.v5)}</td>
+    <td data-order="${d.delta ?? 0}">${deltaPill(d.delta)}</td>
+    <td data-order="${d.percentile_v4 ?? -1}" style="font-size:0.78rem;color:var(--muted);">${fmtPctile(d.percentile_v4)}</td>
+    <td data-order="${d.percentile_v5 ?? -1}" style="font-size:0.78rem;color:var(--muted);">${fmtPctile(d.percentile_v5)}</td>
+    <td><code style="font-size:0.72rem;color:#60a5fa;" title="${d.cwe_name}">${d.cwe || '—'}</code></td>
+    <td style="max-width:110px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${d.vendor}">${d.vendor || '—'}</td>
+    <td style="font-size:0.72rem;">${d.cna || '—'}</td>
+    <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:0.75rem;color:#94a3b8;" title="${d.description}">${d.description || '—'}</td>
+  </tr>`;
+}
 
-  $('#movers-table').DataTable({
+function renderMovers(data) {
+  const upgrades = Array.isArray(data) ? data.filter(d => d.delta > 0) : (data.upgrades || []);
+  const downgrades = Array.isArray(data) ? data.filter(d => d.delta < 0) : (data.downgrades || []);
+
+  document.getElementById('up-count').textContent = upgrades.length;
+  document.getElementById('dn-count').textContent = downgrades.length;
+  document.getElementById('movers-up-tbody').innerHTML = upgrades.map(moverRow).join('');
+  document.getElementById('movers-dn-tbody').innerHTML = downgrades.map(moverRow).join('');
+
+  const dtOpts = (defaultOrder) => ({
     paging: true,
     pageLength: 25,
-    order: [[4, 'asc']],
-    columnDefs: [{ orderable: false, targets: [9] }],
+    order: [defaultOrder],
+    columnDefs: [
+      { orderable: false, targets: [1, 2, 8, 10, 11] },
+      { orderSequence: ['desc','asc'], targets: [3,4,5,6,7] },
+    ],
   });
+  $('#movers-up-table').DataTable(dtOpts([5, 'desc']));
+  $('#movers-dn-table').DataTable(dtOpts([5, 'asc']));
 }
 
 // ── Boot ───────────────────────────────────────────────────────────────────

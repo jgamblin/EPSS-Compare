@@ -23,6 +23,7 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
 
+import numpy as np
 import orjson
 import pandas as pd
 import requests
@@ -739,8 +740,11 @@ CWE_NAMES = {
 
 
 def parse_cvss_vector(vector_string):
-    """Parse a CVSS v3.x vector string into component dict."""
+    """Parse a CVSS v3.x vector string into component dict. Returns {} for CVSS 4.0."""
     if not vector_string or not isinstance(vector_string, str):
+        return {}
+    # CVSS 4.0 uses different metric keys (AT, VC/VI/VA, SC/SI/SA) — skip to avoid mixing with v3 breakdown
+    if vector_string.startswith("CVSS:4.0/"):
         return {}
     parts = vector_string.split("/")
     components = {}
@@ -749,6 +753,46 @@ def parse_cvss_vector(vector_string):
             k, v = part.split(":", 1)
             components[k] = v
     return components
+
+
+VENDOR_ALIASES = {
+    # Microsoft
+    "microsoft": "Microsoft",
+    "microsoft corporation": "Microsoft",
+    # Google
+    "google": "Google",
+    "google inc.": "Google",
+    "google llc": "Google",
+    # Oracle
+    "oracle": "Oracle",
+    "oracle corporation": "Oracle",
+    # Apple
+    "apple": "Apple",
+    "apple inc.": "Apple",
+    "apple inc": "Apple",
+    # Apache
+    "the apache software foundation": "Apache",
+    "apache software foundation": "Apache",
+    # IBM
+    "ibm": "IBM",
+    "ibm corporation": "IBM",
+    "international business machines corporation": "IBM",
+    # Red Hat
+    "red hat": "Red Hat",
+    "red hat, inc.": "Red Hat",
+    "red hat, inc": "Red Hat",
+    "redhat": "Red Hat",
+    # Qualcomm
+    "qualcomm": "Qualcomm",
+    "qualcomm, inc.": "Qualcomm",
+    "qualcomm technologies, inc.": "Qualcomm",
+    # MediaTek
+    "mediatek": "MediaTek",
+    "mediatek, inc.": "MediaTek",
+    # Linux
+    "linux": "Linux",
+    "linux kernel": "Linux",
+}
 
 
 def parse_cve_file(json_path):
@@ -760,6 +804,10 @@ def parse_cve_file(json_path):
         meta = data.get("cveMetadata", {})
         cve_id = meta.get("cveId", "")
         if not cve_id:
+            return None
+
+        # Skip REJECTED and RESERVED records — they have no useful enrichment data
+        if meta.get("state") in ("REJECTED", "RESERVED"):
             return None
 
         cna = data.get("containers", {}).get("cna", {})
@@ -777,8 +825,10 @@ def parse_cve_file(json_path):
             first = affected[0]
             vendor = first.get("vendor", "")
             product = first.get("product", "")
+        # Normalize common vendor name variants to canonical form
+        vendor = VENDOR_ALIASES.get(vendor.lower().strip(), vendor)
 
-        # CWE (first valid)
+        # CWE (first valid cweId; fallback: some CNAs encode CWE in description text only)
         cwe = ""
         for pt in cna.get("problemTypes", []):
             for desc in pt.get("descriptions", []):
@@ -786,17 +836,23 @@ def parse_cve_file(json_path):
                 if cid and re.match(r"CWE-\d+", cid):
                     cwe = cid
                     break
+                # WPScan and similar CNAs set type="CWE" but omit cweId, encoding it in description text
+                if not cwe and desc.get("type", "").upper() == "CWE":
+                    m = re.search(r"CWE-\d+", desc.get("description", ""))
+                    if m:
+                        cwe = m.group(0)
+                        break
             if cwe:
                 break
 
-        # CVSS v3.1 (prefer CNA, fall back to ADP)
+        # CVSS (prefer CNA, fall back to ADP; prefer v3.1 > v3.0 > v4.0)
         cvss_score = None
         cvss_severity = ""
         cvss_vector = ""
 
         def extract_cvss(metrics_list):
             for m in metrics_list:
-                for key in ("cvssV3_1", "cvssV3_0", "cvssV3"):
+                for key in ("cvssV3_1", "cvssV3_0", "cvssV4_0"):
                     if key in m:
                         entry = m[key]
                         return (
@@ -862,19 +918,19 @@ def download_epss(url: str, cache_path: Path, no_download: bool) -> pd.DataFrame
     """Download (or load from cache) a gzipped EPSS CSV."""
     if not no_download or not cache_path.exists():
         print(f"Downloading {url} ...", flush=True)
-        r = requests.get(url, timeout=120)
-        r.raise_for_status()
+        resp = requests.get(url, timeout=120)
+        resp.raise_for_status()
         cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_bytes(r.content)
+        cache_path.write_bytes(resp.content)
     else:
         print(f"Using cached {cache_path}", flush=True)
 
+    # Read entire file once; strip all leading comment lines (starts with #)
     with gzip.open(cache_path, "rt") as f:
-        # Skip metadata comment line
-        first = f.readline()
-        if not first.startswith("#"):
-            f.seek(0)
-        df = pd.read_csv(f)
+        raw = f.read()
+    while raw.startswith("#"):
+        raw = raw[raw.index("\n") + 1:]
+    df = pd.read_csv(io.StringIO(raw))
 
     df.columns = [c.strip() for c in df.columns]
     df["epss"] = pd.to_numeric(df["epss"], errors="coerce")
@@ -883,8 +939,8 @@ def download_epss(url: str, cache_path: Path, no_download: bool) -> pd.DataFrame
 
 
 def r(v):
-    """Round float to 5 decimal places, handle NaN."""
-    if v is None or (isinstance(v, float) and math.isnan(v)):
+    """Round to 5 decimal places; handles None, NaN, and numpy scalars."""
+    if pd.isna(v):
         return None
     return round(float(v), 5)
 
@@ -895,16 +951,46 @@ def write_json(path: Path, obj):
     print(f"  Wrote {path} ({path.stat().st_size / 1024:.1f} KB)", flush=True)
 
 
-def build_summary(merged: pd.DataFrame, v4_meta: str, v5_meta: str) -> dict:
+def build_summary(merged: pd.DataFrame, v4_meta: str, v5_meta: str, date: str) -> dict:
     total = len(merged)
     higher = int((merged["delta"] > 0.001).sum())
     lower = int((merged["delta"] < -0.001).sum())
     same = total - higher - lower
+
+    # CVSS coverage disclosure
+    cvss_with_data = int((merged["cvss_severity"] != "").sum())
+    cvss_pct = round(cvss_with_data / total * 100, 1)
+
+    # Threshold crossing analysis — include base rates for context
+    crossings = {}
+    for t in [0.05, 0.1, 0.2, 0.5]:
+        v4_above = int((merged["epss_v4"] >= t).sum())
+        v4_below = int((merged["epss_v4"] < t).sum())
+        crossed_up = int(((merged["epss_v4"] < t) & (merged["epss_v5"] >= t)).sum())
+        crossed_down = int(((merged["epss_v4"] >= t) & (merged["epss_v5"] < t)).sum())
+        crossings[str(t)] = {
+            "threshold": t,
+            "v4_above": v4_above,
+            "v4_below": v4_below,
+            "crossed_up": crossed_up,
+            "crossed_down": crossed_down,
+            "net": crossed_up - crossed_down,
+        }
+
+    # No-CVSS CVE behavior: how does V5 treat CVEs with no vendor severity signal?
+    no_cvss = merged[merged["cvss_severity"] == ""]
+    no_cvss_count = len(no_cvss)
+    no_cvss_median_v4 = r(no_cvss["epss_v4"].median()) if no_cvss_count > 0 else None
+    no_cvss_median_v5 = r(no_cvss["epss_v5"].median()) if no_cvss_count > 0 else None
+    no_cvss_pct_higher = round(
+        float((no_cvss["delta"] > 0.001).sum()) / max(no_cvss_count, 1) * 100, 1
+    ) if no_cvss_count > 0 else None
+
     return {
         "total_cves": total,
         "v4_model": v4_meta,
         "v5_model": v5_meta,
-        "score_date": "2026-05-22",
+        "score_date": date,
         "pct_higher_in_v5": round(higher / total * 100, 2),
         "pct_lower_in_v5": round(lower / total * 100, 2),
         "pct_same": round(same / total * 100, 2),
@@ -919,12 +1005,18 @@ def build_summary(merged: pd.DataFrame, v4_meta: str, v5_meta: str) -> dict:
         "delta_median": r(merged["delta"].median()),
         "delta_max": r(merged["delta"].max()),
         "delta_min": r(merged["delta"].min()),
+        "cvss_with_data": cvss_with_data,
+        "cvss_pct": cvss_pct,
+        "no_cvss_count": no_cvss_count,
+        "no_cvss_median_v4": no_cvss_median_v4,
+        "no_cvss_median_v5": no_cvss_median_v5,
+        "no_cvss_pct_higher": no_cvss_pct_higher,
+        "threshold_crossings": crossings,
     }
 
 
 def build_scatter(merged: pd.DataFrame, n: int = 5000) -> list:
     """Stratified sample: proportional across score buckets."""
-    import numpy as np
     df = merged[["cve", "epss_v4", "epss_v5", "delta", "cvss_severity"]].dropna(subset=["epss_v4", "epss_v5"])
     df = df.copy()
     df["bucket"] = pd.cut(df["epss_v5"], bins=10, labels=False)
@@ -938,15 +1030,6 @@ def build_scatter(merged: pd.DataFrame, n: int = 5000) -> list:
         for row in sampled.itertuples()
     ]
 
-
-def build_delta_distribution(merged: pd.DataFrame) -> dict:
-    import numpy as np
-    deltas = merged["delta"].dropna()
-    h, edges = np.histogram(deltas, bins=100, range=(-1, 1))
-    return {
-        "bins": [round(edges[i], 2) for i in range(len(edges) - 1)],
-        "counts": h.tolist(),
-    }
 
 
 def build_by_cwe(merged: pd.DataFrame, top_n: int = 40) -> list:
@@ -1027,7 +1110,7 @@ def build_by_severity(merged: pd.DataFrame) -> list:
         median_v4=("epss_v4", "median"),
         median_v5=("epss_v5", "median"),
     ).reset_index()
-    grp["_ord"] = grp["cvss_severity"].apply(lambda x: order.index(x) if x in order else 99)
+    grp["_ord"] = grp["cvss_severity"].apply(order.index)
     grp = grp.sort_values("_ord")
     return [
         {
@@ -1051,7 +1134,7 @@ def build_by_field(merged: pd.DataFrame, field: str, top_n: int) -> list:
         (merged[field] != "") &
         (merged[field].str.strip() != "") &
         (~merged[field].str.strip().str.lower().isin(EXCLUDE_VALUES))
-    ]
+    ].copy()
     grp = df.groupby(field).agg(
         count=("cve", "count"),
         avg_v4=("epss_v4", "mean"),
@@ -1075,27 +1158,40 @@ def build_by_field(merged: pd.DataFrame, field: str, top_n: int) -> list:
     ]
 
 
-def build_movers(merged: pd.DataFrame, top_n: int = 50) -> list:
+def _mover_record(row) -> dict:
+    # Parse CVE year from ID (e.g., CVE-2012-1446 -> "2012")
+    cve_year = row.cve.split("-")[1] if row.cve.startswith("CVE-") and row.cve.count("-") >= 2 else ""
+    # Suppress placeholder vendor/product values in display
+    vendor = row.vendor if row.vendor.strip().lower() not in EXCLUDE_VALUES else ""
+    product = row.product if row.product.strip().lower() not in EXCLUDE_VALUES else ""
+    return {
+        "cve": row.cve,
+        "year": cve_year,
+        "v4": r(row.epss_v4),
+        "v5": r(row.epss_v5),
+        "delta": r(row.delta),
+        "percentile_v4": r(row.percentile_v4),
+        "percentile_v5": r(row.percentile_v5),
+        "severity": row.cvss_severity or "",
+        "cvss_score": r(row.cvss_score),
+        "vendor": vendor,
+        "product": product,
+        "cwe": row.cwe or "",
+        "cwe_name": CWE_NAMES.get(row.cwe, "") if row.cwe else "",
+        "cna": row.cna or "",
+        "description": row.description or "",
+    }
+
+
+def build_movers(merged: pd.DataFrame, top_n: int = 50) -> dict:
+    """Return top upgrades and top downgrades separately."""
     df = merged.copy()
-    df["abs_delta"] = df["delta"].abs()
-    top = df.nlargest(top_n, "abs_delta")
-    return [
-        {
-            "cve": row.cve,
-            "v4": r(row.epss_v4),
-            "v5": r(row.epss_v5),
-            "delta": r(row.delta),
-            "severity": row.cvss_severity or "",
-            "cvss_score": r(row.cvss_score) if row.cvss_score is not None else None,
-            "vendor": row.vendor or "",
-            "product": row.product or "",
-            "cwe": row.cwe or "",
-            "cwe_name": CWE_NAMES.get(row.cwe, "") if row.cwe else "",
-            "cna": row.cna or "",
-            "description": row.description or "",
-        }
-        for row in top.itertuples()
-    ]
+    upgrades = df[df["delta"] > 0].nlargest(top_n, "delta")
+    downgrades = df[df["delta"] < 0].nsmallest(top_n, "delta")
+    return {
+        "upgrades": [_mover_record(row) for row in upgrades.itertuples()],
+        "downgrades": [_mover_record(row) for row in downgrades.itertuples()],
+    }
 
 
 def read_model_version(gz_bytes: bytes) -> str:
@@ -1130,25 +1226,13 @@ def main():
     print(f"Date: {date}", flush=True)
     print(f"CVE dir: {cve_dir}", flush=True)
 
-    # Download model version metadata
-    if not args.no_download or not v4_cache.exists():
-        r_v4 = requests.get(v4_url, timeout=120)
-        r_v4.raise_for_status()
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        v4_cache.write_bytes(r_v4.content)
-    if not args.no_download or not v5_cache.exists():
-        r_v5 = requests.get(v5_url, timeout=120)
-        r_v5.raise_for_status()
-        v5_cache.write_bytes(r_v5.content)
-
+    print("\n[1/4] Loading EPSS scores...", flush=True)
+    v4 = download_epss(v4_url, v4_cache, no_download=args.no_download)
     v4_meta = read_model_version(v4_cache.read_bytes())
+    v5 = download_epss(v5_url, v5_cache, no_download=args.no_download)
     v5_meta = read_model_version(v5_cache.read_bytes())
     print(f"V4 model: {v4_meta}", flush=True)
     print(f"V5 model: {v5_meta}", flush=True)
-
-    print("\n[1/4] Loading EPSS scores...", flush=True)
-    v4 = download_epss(v4_url, v4_cache, no_download=True)
-    v5 = download_epss(v5_url, v5_cache, no_download=True)
     v4 = v4.rename(columns={"epss": "epss_v4", "percentile": "percentile_v4"})
     v5 = v5.rename(columns={"epss": "epss_v5", "percentile": "percentile_v5"})
     merged = pd.merge(v4, v5, on="cve", how="inner")
@@ -1163,7 +1247,6 @@ def main():
         merged[col] = merged[col].fillna("").astype(str).str.strip()
 
     print("\n[3/4] Computing aggregations...", flush=True)
-    import numpy as np
 
     # Score distribution
     v4_h, edges = np.histogram(merged["epss_v4"].dropna(), bins=100, range=(0, 1))
@@ -1182,7 +1265,7 @@ def main():
     }
 
     print("\n[4/4] Writing JSON files...", flush=True)
-    write_json(out_dir / "summary.json", build_summary(merged, v4_meta, v5_meta))
+    write_json(out_dir / "summary.json", build_summary(merged, v4_meta, v5_meta, date))
     write_json(out_dir / "score_distribution.json", score_dist)
     write_json(out_dir / "delta_distribution.json", delta_dist)
     write_json(out_dir / "scatter.json", build_scatter(merged))
