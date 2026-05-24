@@ -1,0 +1,834 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EPSS V4 vs V5 Beta — Analyst Comparison Report</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.bootstrap5.min.css">
+  <style>
+    :root {
+      --v4-color: #3b82f6;
+      --v5-color: #f59e0b;
+      --up-color: #10b981;
+      --down-color: #ef4444;
+      --neutral-color: #6b7280;
+    }
+    body { background: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .navbar { background: #1e293b !important; border-bottom: 1px solid #334155; }
+    .navbar-brand { font-weight: 700; letter-spacing: -0.5px; }
+    .badge-v4 { background: var(--v4-color); }
+    .badge-v5 { background: var(--v5-color); }
+    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; }
+    .card-header { background: #162032; border-bottom: 1px solid #334155; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; }
+    .stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.25rem; }
+    .stat-value { font-size: 2rem; font-weight: 700; line-height: 1; }
+    .stat-label { font-size: 0.75rem; color: #94a3b8; margin-top: 0.3rem; text-transform: uppercase; letter-spacing: 0.07em; }
+    .nav-pills .nav-link { color: #94a3b8; border-radius: 8px; font-size: 0.875rem; }
+    .nav-pills .nav-link.active { background: #3b82f6; color: #fff; }
+    .nav-pills .nav-link:hover:not(.active) { background: #334155; color: #e2e8f0; }
+    .section-title { font-size: 1.1rem; font-weight: 600; color: #e2e8f0; margin-bottom: 0.25rem; }
+    .section-sub { font-size: 0.8rem; color: #64748b; margin-bottom: 1.25rem; }
+    .chart-wrap { position: relative; width: 100%; }
+    .delta-pill { display: inline-block; padding: 0.15em 0.5em; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+    .delta-up { background: rgba(16,185,129,0.15); color: #10b981; }
+    .delta-down { background: rgba(239,68,68,0.15); color: #ef4444; }
+    .delta-same { background: rgba(107,114,128,0.15); color: #9ca3af; }
+    .sev-CRITICAL { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+    .sev-HIGH { background: rgba(249,115,22,0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.3); }
+    .sev-MEDIUM { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+    .sev-LOW { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+    .sev-badge { display: inline-block; padding: 0.15em 0.5em; border-radius: 4px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; }
+    table.dataTable { color: #e2e8f0 !important; }
+    table.dataTable thead th { color: #94a3b8 !important; border-color: #334155 !important; background: #162032 !important; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    table.dataTable tbody td { border-color: #334155 !important; font-size: 0.82rem; vertical-align: middle; }
+    table.dataTable tbody tr { background: #1e293b !important; }
+    table.dataTable tbody tr:hover { background: #293548 !important; }
+    .dataTables_wrapper .dataTables_filter input,
+    .dataTables_wrapper .dataTables_length select { background: #162032; border: 1px solid #334155; color: #e2e8f0; border-radius: 6px; padding: 0.2rem 0.5rem; }
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_wrapper .dataTables_paginate { color: #64748b; font-size: 0.78rem; }
+    .dataTables_wrapper .dataTables_paginate .paginate_button { color: #94a3b8 !important; }
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current { background: #3b82f6 !important; border-color: #3b82f6 !important; color: #fff !important; border-radius: 4px; }
+    .cve-link { color: #60a5fa; text-decoration: none; font-family: monospace; font-size: 0.8rem; }
+    .cve-link:hover { color: #93c5fd; text-decoration: underline; }
+    .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
+    .loading-overlay { display: flex; align-items: center; justify-content: center; min-height: 200px; color: #64748b; }
+    .spinner-border { width: 1.5rem; height: 1.5rem; margin-right: 0.5rem; }
+    .score-bar-wrap { display: flex; align-items: center; gap: 6px; }
+    .score-bar { height: 4px; border-radius: 2px; min-width: 2px; }
+    .score-val { font-size: 0.78rem; color: #cbd5e1; width: 50px; text-align: right; }
+    #built-at { font-size: 0.7rem; color: #475569; }
+    .section-anchor { scroll-margin-top: 70px; }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark sticky-top">
+  <div class="container-fluid">
+    <span class="navbar-brand">
+      <span class="badge-v4" style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;"></span>
+      EPSS V4
+      <span class="mx-1 text-secondary">vs</span>
+      <span class="badge-v5" style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;"></span>
+      V5 Beta — Analyst Report
+    </span>
+    <span id="built-at" class="text-secondary"></span>
+  </div>
+</nav>
+
+<div class="container-fluid px-3 px-lg-4 py-4" style="max-width:1400px; margin:0 auto;">
+
+  <!-- Summary stats -->
+  <div id="summary-section" class="section-anchor mb-4">
+    <div class="section-title">Executive Summary</div>
+    <div class="section-sub">Score date: 2026-05-22 &nbsp;|&nbsp; Comparing EPSS model versions side by side</div>
+    <div class="row g-3" id="stat-cards">
+      <div class="col-12 loading-overlay"><div class="spinner-border text-primary"></div> Loading…</div>
+    </div>
+  </div>
+
+  <!-- Nav tabs -->
+  <ul class="nav nav-pills flex-wrap gap-1 mb-4" id="section-nav">
+    <li class="nav-item"><a class="nav-link active" href="#dist-section">Distribution</a></li>
+    <li class="nav-item"><a class="nav-link" href="#scatter-section">Correlation</a></li>
+    <li class="nav-item"><a class="nav-link" href="#delta-section">Score Shift</a></li>
+    <li class="nav-item"><a class="nav-link" href="#severity-section">By Severity</a></li>
+    <li class="nav-item"><a class="nav-link" href="#cwe-section">By CWE</a></li>
+    <li class="nav-item"><a class="nav-link" href="#cvss-section">By CVSS Vector</a></li>
+    <li class="nav-item"><a class="nav-link" href="#vendor-section">By Vendor</a></li>
+    <li class="nav-item"><a class="nav-link" href="#product-section">By Product</a></li>
+    <li class="nav-item"><a class="nav-link" href="#cna-section">By CNA</a></li>
+    <li class="nav-item"><a class="nav-link" href="#movers-section">Top Movers</a></li>
+  </ul>
+
+  <!-- Score Distribution -->
+  <div id="dist-section" class="section-anchor card mb-4">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      Score Distribution
+      <div>
+        <button class="btn btn-sm btn-outline-secondary me-1" id="dist-log-btn" onclick="toggleDistLog()">Log Scale</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="section-sub mb-2">How EPSS probabilities are distributed across all CVEs — V4 (blue) vs V5 (amber). Most CVEs cluster near zero.</div>
+      <div class="chart-wrap" style="height:300px;">
+        <canvas id="distChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scatter -->
+  <div id="scatter-section" class="section-anchor card mb-4">
+    <div class="card-header">Score Correlation — V4 vs V5 (5,000 sampled CVEs)</div>
+    <div class="card-body">
+      <div class="section-sub mb-2">Each point is a CVE. Points above the diagonal line scored <em>higher</em> in V5; below = lower. Colored by CVSS severity.</div>
+      <div class="chart-wrap" style="height:420px;">
+        <canvas id="scatterChart"></canvas>
+      </div>
+      <div class="mt-2 d-flex flex-wrap gap-3" id="scatter-legend"></div>
+    </div>
+  </div>
+
+  <!-- Delta distribution -->
+  <div id="delta-section" class="section-anchor card mb-4">
+    <div class="card-header">Score Shift Distribution (V5 − V4)</div>
+    <div class="card-body">
+      <div class="section-sub mb-2">Distribution of per-CVE score changes. Positive = V5 scored higher, negative = V5 scored lower.</div>
+      <div class="chart-wrap" style="height:280px;">
+        <canvas id="deltaChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- By Severity -->
+  <div id="severity-section" class="section-anchor card mb-4">
+    <div class="card-header">Average EPSS Score by CVSS Severity</div>
+    <div class="card-body">
+      <div class="section-sub mb-2">How V4 and V5 scores compare within each CVSS severity band.</div>
+      <div class="row g-3">
+        <div class="col-lg-7">
+          <div class="chart-wrap" style="height:280px;"><canvas id="severityChart"></canvas></div>
+        </div>
+        <div class="col-lg-5">
+          <div class="table-responsive">
+            <table class="table table-sm table-dark" id="severity-table">
+              <thead><tr><th>Severity</th><th>Count</th><th>Avg V4</th><th>Avg V5</th><th>Δ</th></tr></thead>
+              <tbody id="severity-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- By CWE -->
+  <div id="cwe-section" class="section-anchor card mb-4">
+    <div class="card-header">By CWE (Top 40 by CVE Count)</div>
+    <div class="card-body">
+      <div class="section-sub mb-2">Average EPSS scores grouped by Common Weakness Enumeration. Shows which vulnerability types saw the biggest model changes.</div>
+      <div class="row g-3">
+        <div class="col-xl-6">
+          <div class="chart-wrap" style="height:380px;"><canvas id="cweChart"></canvas></div>
+        </div>
+        <div class="col-xl-6">
+          <div class="table-responsive">
+            <table id="cwe-table" class="table table-sm table-dark w-100">
+              <thead><tr><th>CWE</th><th>Name</th><th>Count</th><th>Avg V4</th><th>Avg V5</th><th>Δ</th></tr></thead>
+              <tbody id="cwe-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- By CVSS Vector -->
+  <div id="cvss-section" class="section-anchor card mb-4">
+    <div class="card-header">By CVSS v3 Vector Components</div>
+    <div class="card-body">
+      <div class="section-sub mb-2">How V4 and V5 scores compare across each CVSS metric dimension (Attack Vector, Complexity, Privileges, Impact, etc.).</div>
+      <div id="cvss-charts" class="row g-3"></div>
+    </div>
+  </div>
+
+  <!-- By Vendor -->
+  <div id="vendor-section" class="section-anchor card mb-4">
+    <div class="card-header">By Vendor (Top 30 by CVE Count)</div>
+    <div class="card-body">
+      <div class="section-sub mb-2">Vendors with the most CVEs in the dataset and how their scores shifted from V4 to V5.</div>
+      <div class="row g-3">
+        <div class="col-xl-6">
+          <div class="chart-wrap" style="height:480px;"><canvas id="vendorChart"></canvas></div>
+        </div>
+        <div class="col-xl-6">
+          <div class="table-responsive">
+            <table id="vendor-table" class="table table-sm table-dark w-100">
+              <thead><tr><th>Vendor</th><th>CVEs</th><th>Avg V4</th><th>Avg V5</th><th>Δ</th><th>Median V4</th><th>Median V5</th></tr></thead>
+              <tbody id="vendor-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- By Product -->
+  <div id="product-section" class="section-anchor card mb-4">
+    <div class="card-header">By Product (Top 50 by CVE Count)</div>
+    <div class="card-body">
+      <div class="section-sub mb-2">Products with the most CVEs and their score comparison.</div>
+      <div class="table-responsive">
+        <table id="product-table" class="table table-sm table-dark w-100">
+          <thead><tr><th>Product</th><th>CVEs</th><th>Avg V4</th><th>Avg V5</th><th>Δ</th><th>Median V4</th><th>Median V5</th></tr></thead>
+          <tbody id="product-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- By CNA -->
+  <div id="cna-section" class="section-anchor card mb-4">
+    <div class="card-header">By CNA / Assigner (Top 30 by CVE Count)</div>
+    <div class="card-body">
+      <div class="section-sub mb-2">CVE Numbering Authorities ranked by volume of published CVEs and how their assigned CVEs scored in each model.</div>
+      <div class="table-responsive">
+        <table id="cna-table" class="table table-sm table-dark w-100">
+          <thead><tr><th>CNA</th><th>CVEs</th><th>Avg V4</th><th>Avg V5</th><th>Δ</th><th>Median V4</th><th>Median V5</th></tr></thead>
+          <tbody id="cna-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Movers -->
+  <div id="movers-section" class="section-anchor card mb-4">
+    <div class="card-header">Top 50 Movers — Largest V4 → V5 Score Changes</div>
+    <div class="card-body">
+      <div class="section-sub mb-2">CVEs where the model change had the greatest impact on predicted exploitation probability.</div>
+      <div class="table-responsive">
+        <table id="movers-table" class="table table-sm table-dark w-100">
+          <thead>
+            <tr>
+              <th>CVE</th><th>Severity</th><th>V4 Score</th><th>V5 Score</th><th>Change</th>
+              <th>CWE</th><th>Vendor</th><th>Product</th><th>CNA</th><th>Description</th>
+            </tr>
+          </thead>
+          <tbody id="movers-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-center text-secondary pb-4" style="font-size:0.75rem;">
+    Data: EPSS by FIRST.org &amp; Cyentia Institute · CVE metadata: CVEProject/cvelistV5 · Built with <a href="https://github.com/gamblin/EPSS-Compare" class="text-secondary">EPSS-Compare</a>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.bootstrap5.min.js"></script>
+
+<script>
+// ── Palette ────────────────────────────────────────────────────────────────
+const V4_COLOR = '#3b82f6';
+const V5_COLOR = '#f59e0b';
+const V4_FILL = 'rgba(59,130,246,0.35)';
+const V5_FILL = 'rgba(245,158,11,0.35)';
+const UP_COLOR = '#10b981';
+const DOWN_COLOR = '#ef4444';
+const NEUTRAL_COLOR = '#6b7280';
+
+const SEV_COLORS = {
+  CRITICAL: '#ef4444',
+  HIGH:     '#f97316',
+  MEDIUM:   '#f59e0b',
+  LOW:      '#22c55e',
+  NONE:     '#6b7280',
+  '':       '#475569',
+  Unknown:  '#475569',
+};
+
+Chart.defaults.color = '#94a3b8';
+Chart.defaults.borderColor = '#1e3a5f22';
+Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+const fmt = v => (v === null || v === undefined) ? '—' : v.toFixed(4);
+const fmtPct = v => v !== null && v !== undefined ? v.toFixed(1) + '%' : '—';
+
+function deltaPill(d) {
+  if (d === null || d === undefined) return '<span class="delta-pill delta-same">—</span>';
+  const sign = d > 0.0005 ? '+' : (d < -0.0005 ? '' : '±');
+  const cls = d > 0.0005 ? 'delta-up' : (d < -0.0005 ? 'delta-down' : 'delta-same');
+  return `<span class="delta-pill ${cls}">${sign}${d.toFixed(4)}</span>`;
+}
+
+function sevBadge(sev) {
+  if (!sev) return '';
+  const cls = `sev-${sev.toUpperCase()}` in document.styleSheets ? '' : '';
+  return `<span class="sev-badge sev-${sev.toUpperCase()}">${sev}</span>`;
+}
+
+function scoreBar(v, color) {
+  const pct = Math.max(0, Math.min(100, (v || 0) * 100));
+  return `<div class="score-bar-wrap"><div class="score-bar" style="width:${pct * 1.2}px;background:${color};"></div><span class="score-val">${fmt(v)}</span></div>`;
+}
+
+async function fetchJSON(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(`Failed to load ${path}: ${r.status}`);
+  return r.json();
+}
+
+// ── Smooth scroll for nav pills ────────────────────────────────────────────
+document.querySelectorAll('#section-nav a').forEach(a => {
+  a.addEventListener('click', e => {
+    e.preventDefault();
+    const target = document.querySelector(a.getAttribute('href'));
+    if (target) target.scrollIntoView({ behavior: 'smooth' });
+    document.querySelectorAll('#section-nav a').forEach(x => x.classList.remove('active'));
+    a.classList.add('active');
+  });
+});
+
+// ── Main loader ────────────────────────────────────────────────────────────
+let distChart, distLogMode = false;
+let distData = null;
+
+async function init() {
+  const [summary, dist, scatter, delta, byCwe, byCvss, bySev, byVendor, byProduct, byCna, movers, meta] =
+    await Promise.all([
+      fetchJSON('data/summary.json'),
+      fetchJSON('data/score_distribution.json'),
+      fetchJSON('data/scatter.json'),
+      fetchJSON('data/delta_distribution.json'),
+      fetchJSON('data/by_cwe.json'),
+      fetchJSON('data/by_cvss_component.json'),
+      fetchJSON('data/by_severity.json'),
+      fetchJSON('data/by_vendor.json'),
+      fetchJSON('data/by_product.json'),
+      fetchJSON('data/by_cna.json'),
+      fetchJSON('data/movers.json'),
+      fetchJSON('data/meta.json'),
+    ]);
+
+  if (meta && meta.built_at) {
+    document.getElementById('built-at').textContent =
+      'Built: ' + new Date(meta.built_at).toLocaleString();
+  }
+
+  renderSummary(summary);
+  distData = dist;
+  renderDistribution(dist, false);
+  renderScatter(scatter);
+  renderDelta(delta);
+  renderSeverity(bySev);
+  renderCwe(byCwe);
+  renderCvssComponents(byCvss);
+  renderByField('vendor', byVendor, 'vendor');
+  renderByField('product', byProduct, 'product');
+  renderByField('cna', byCna, 'cna');
+  renderMovers(movers);
+}
+
+// ── Summary cards ─────────────────────────────────────────────────────────
+function renderSummary(d) {
+  const container = document.getElementById('stat-cards');
+  container.innerHTML = `
+    <div class="col-6 col-md-4 col-lg-2">
+      <div class="stat-card">
+        <div class="stat-value text-primary">${(d.total_cves/1000).toFixed(0)}k</div>
+        <div class="stat-label">Total CVEs Scored</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+      <div class="stat-card">
+        <div class="stat-value" style="color:${UP_COLOR}">${d.pct_higher_in_v5}%</div>
+        <div class="stat-label">Scored Higher in V5</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+      <div class="stat-card">
+        <div class="stat-value" style="color:${DOWN_COLOR}">${d.pct_lower_in_v5}%</div>
+        <div class="stat-label">Scored Lower in V5</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--v4-color)">${d.v4_median}</div>
+        <div class="stat-label">V4 Median Score</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+      <div class="stat-card">
+        <div class="stat-value" style="color:var(--v5-color)">${d.v5_median}</div>
+        <div class="stat-label">V5 Median Score</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-4 col-lg-2">
+      <div class="stat-card">
+        <div class="stat-value" style="color:${d.delta_median >= 0 ? UP_COLOR : DOWN_COLOR}">${d.delta_median >= 0 ? '+' : ''}${d.delta_median}</div>
+        <div class="stat-label">Median Score Shift</div>
+      </div>
+    </div>
+    <div class="col-12">
+      <div class="stat-card d-flex flex-wrap gap-4 py-2">
+        <div><span class="text-secondary" style="font-size:0.75rem;">V4 MODEL</span><br><span style="font-family:monospace;font-size:0.85rem;color:#60a5fa;">${d.v4_model}</span></div>
+        <div><span class="text-secondary" style="font-size:0.75rem;">V5 BETA MODEL</span><br><span style="font-family:monospace;font-size:0.85rem;color:#fbbf24;">${d.v5_model}</span></div>
+        <div><span class="text-secondary" style="font-size:0.75rem;">SCORE DATE</span><br><span style="font-size:0.85rem;">${d.score_date}</span></div>
+        <div><span class="text-secondary" style="font-size:0.75rem;">HIGHER IN V5</span><br><span style="font-size:0.85rem;">${d.count_higher.toLocaleString()}</span></div>
+        <div><span class="text-secondary" style="font-size:0.75rem;">LOWER IN V5</span><br><span style="font-size:0.85rem;">${d.count_lower.toLocaleString()}</span></div>
+        <div><span class="text-secondary" style="font-size:0.75rem;">UNCHANGED</span><br><span style="font-size:0.85rem;">${d.count_same.toLocaleString()}</span></div>
+        <div><span class="text-secondary" style="font-size:0.75rem;">MAX INCREASE</span><br><span style="font-size:0.85rem;color:${UP_COLOR}">+${d.delta_max}</span></div>
+        <div><span class="text-secondary" style="font-size:0.75rem;">MAX DECREASE</span><br><span style="font-size:0.85rem;color:${DOWN_COLOR}">${d.delta_min}</span></div>
+      </div>
+    </div>
+  `;
+}
+
+// ── Distribution chart ────────────────────────────────────────────────────
+function renderDistribution(dist, logMode) {
+  const ctx = document.getElementById('distChart').getContext('2d');
+  const data = {
+    labels: dist.bins.map(b => b.toFixed(2)),
+    datasets: [
+      {
+        label: 'EPSS V4',
+        data: dist.v4,
+        backgroundColor: V4_FILL,
+        borderColor: V4_COLOR,
+        borderWidth: 1.5,
+        fill: true,
+        pointRadius: 0,
+        tension: 0.2,
+        type: 'line',
+      },
+      {
+        label: 'EPSS V5 Beta',
+        data: dist.v5,
+        backgroundColor: V5_FILL,
+        borderColor: V5_COLOR,
+        borderWidth: 1.5,
+        fill: true,
+        pointRadius: 0,
+        tension: 0.2,
+        type: 'line',
+      },
+    ],
+  };
+  if (distChart) distChart.destroy();
+  distChart = new Chart(ctx, {
+    type: 'line',
+    data,
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: {
+          callbacks: {
+            title: items => `Score bin: ${items[0].label}`,
+            label: item => ` ${item.dataset.label}: ${item.raw.toLocaleString()} CVEs`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          title: { display: true, text: 'EPSS Score' },
+          ticks: { maxTicksLimit: 11, callback: (v, i, vals) => dist.bins[i] !== undefined ? dist.bins[i].toFixed(1) : '' },
+        },
+        y: {
+          type: logMode ? 'logarithmic' : 'linear',
+          title: { display: true, text: 'Number of CVEs' },
+          ticks: { callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v },
+        },
+      },
+    },
+  });
+}
+
+function toggleDistLog() {
+  distLogMode = !distLogMode;
+  const btn = document.getElementById('dist-log-btn');
+  btn.classList.toggle('btn-primary', distLogMode);
+  btn.classList.toggle('btn-outline-secondary', !distLogMode);
+  if (distData) renderDistribution(distData, distLogMode);
+}
+
+// ── Scatter chart ─────────────────────────────────────────────────────────
+function renderScatter(points) {
+  const bySev = {};
+  points.forEach(p => {
+    const sev = p.sev || 'Unknown';
+    if (!bySev[sev]) bySev[sev] = [];
+    bySev[sev].push({ x: p.v4, y: p.v5, cve: p.cve, d: p.d });
+  });
+
+  const datasets = Object.entries(bySev).map(([sev, pts]) => ({
+    label: sev || 'Unknown',
+    data: pts,
+    backgroundColor: (SEV_COLORS[sev.toUpperCase()] || '#475569') + '99',
+    borderColor: 'transparent',
+    pointRadius: 3,
+    pointHoverRadius: 5,
+  }));
+
+  // Diagonal reference line
+  datasets.push({
+    label: 'V4 = V5 (no change)',
+    data: [{x:0,y:0},{x:1,y:1}],
+    type: 'line',
+    borderColor: '#475569',
+    borderDash: [6,3],
+    borderWidth: 1,
+    pointRadius: 0,
+    fill: false,
+  });
+
+  const ctx = document.getElementById('scatterChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'scatter',
+    data: { datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 10, padding: 12 } },
+        tooltip: {
+          callbacks: {
+            label: item => {
+              if (item.dataset.label === 'V4 = V5 (no change)') return null;
+              const p = item.raw;
+              return [
+                ` ${p.cve}`,
+                ` V4: ${p.x?.toFixed(4)}  →  V5: ${p.y?.toFixed(4)}`,
+                ` Δ: ${p.d >= 0 ? '+' : ''}${p.d?.toFixed(4)}`,
+              ];
+            },
+          },
+        },
+      },
+      scales: {
+        x: { min: 0, max: 1, title: { display: true, text: 'EPSS V4 Score' } },
+        y: { min: 0, max: 1, title: { display: true, text: 'EPSS V5 Beta Score' } },
+      },
+    },
+  });
+
+  // Legend
+  const leg = document.getElementById('scatter-legend');
+  const sevOrder = ['CRITICAL','HIGH','MEDIUM','LOW','NONE','Unknown'];
+  sevOrder.filter(s => bySev[s]).forEach(s => {
+    const el = document.createElement('span');
+    el.style.fontSize = '0.78rem';
+    el.innerHTML = `<span class="legend-dot" style="background:${SEV_COLORS[s.toUpperCase()]||'#475569'}"></span>${s} (${bySev[s].length.toLocaleString()})`;
+    leg.appendChild(el);
+  });
+}
+
+// ── Delta distribution ────────────────────────────────────────────────────
+function renderDelta(delta) {
+  const ctx = document.getElementById('deltaChart').getContext('2d');
+  const colors = delta.bins.map(b => b >= 0 ? UP_COLOR + 'aa' : DOWN_COLOR + 'aa');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: delta.bins.map(b => b.toFixed(2)),
+      datasets: [{
+        label: 'CVE Count',
+        data: delta.counts,
+        backgroundColor: colors,
+        borderColor: colors,
+        borderWidth: 0,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { title: items => `Δ ≈ ${items[0].label}` } },
+      },
+      scales: {
+        x: { title: { display: true, text: 'Score Change (V5 − V4)' }, ticks: { maxTicksLimit: 11 } },
+        y: { title: { display: true, text: 'CVEs' }, ticks: { callback: v => v >= 1000 ? (v/1000).toFixed(0)+'k' : v } },
+      },
+    },
+  });
+}
+
+// ── Severity ──────────────────────────────────────────────────────────────
+function renderSeverity(data) {
+  const labels = data.map(d => d.severity);
+  const ctx = document.getElementById('severityChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        { label: 'V4 Avg', data: data.map(d => d.avg_v4), backgroundColor: V4_COLOR + 'cc', borderColor: V4_COLOR, borderWidth: 1 },
+        { label: 'V5 Avg', data: data.map(d => d.avg_v5), backgroundColor: V5_COLOR + 'cc', borderColor: V5_COLOR, borderWidth: 1 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: { legend: { position: 'top' } },
+      scales: {
+        y: { min: 0, max: 1, title: { display: true, text: 'Avg EPSS Score' } },
+      },
+    },
+  });
+
+  const tbody = document.getElementById('severity-tbody');
+  tbody.innerHTML = data.map(d => `
+    <tr>
+      <td>${sevBadge(d.severity)}</td>
+      <td>${d.count.toLocaleString()}</td>
+      <td style="color:${V4_COLOR}">${fmt(d.avg_v4)}</td>
+      <td style="color:${V5_COLOR}">${fmt(d.avg_v5)}</td>
+      <td>${deltaPill(d.avg_delta)}</td>
+    </tr>
+  `).join('');
+}
+
+// ── CWE ───────────────────────────────────────────────────────────────────
+function renderCwe(data) {
+  const top15 = data.slice(0, 15);
+  const ctx = document.getElementById('cweChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: top15.map(d => d.cwe),
+      datasets: [
+        { label: 'V4 Avg', data: top15.map(d => d.avg_v4), backgroundColor: V4_COLOR + 'cc', borderColor: V4_COLOR, borderWidth: 1 },
+        { label: 'V5 Avg', data: top15.map(d => d.avg_v5), backgroundColor: V5_COLOR + 'cc', borderColor: V5_COLOR, borderWidth: 1 },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: false,
+      plugins: {
+        legend: { position: 'top' },
+        tooltip: { callbacks: { title: items => `${items[0].label}: ${top15[items[0].dataIndex].name}` } },
+      },
+      scales: {
+        x: { ticks: { font: { size: 10 } } },
+        y: { min: 0, title: { display: true, text: 'Avg EPSS Score' } },
+      },
+    },
+  });
+
+  const tbody = document.getElementById('cwe-tbody');
+  tbody.innerHTML = data.map(d => `
+    <tr>
+      <td><code style="font-size:0.75rem;color:#60a5fa;">${d.cwe}</code></td>
+      <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${d.name}">${d.name}</td>
+      <td>${d.count.toLocaleString()}</td>
+      <td style="color:${V4_COLOR}">${fmt(d.avg_v4)}</td>
+      <td style="color:${V5_COLOR}">${fmt(d.avg_v5)}</td>
+      <td>${deltaPill(d.avg_delta)}</td>
+    </tr>
+  `).join('');
+
+  $('#cwe-table').DataTable({
+    paging: true, pageLength: 15, order: [[2,'desc']],
+    columnDefs: [{ orderable: false, targets: [1] }],
+  });
+}
+
+// ── CVSS Vector components ────────────────────────────────────────────────
+const CVSS_METRIC_LABELS = {
+  AV: 'Attack Vector',
+  AC: 'Attack Complexity',
+  PR: 'Privileges Required',
+  UI: 'User Interaction',
+  S:  'Scope',
+  C:  'Confidentiality',
+  I:  'Integrity',
+  A:  'Availability',
+};
+
+function renderCvssComponents(data) {
+  const container = document.getElementById('cvss-charts');
+  const metrics = Object.keys(CVSS_METRIC_LABELS);
+  container.innerHTML = metrics.map(m => `
+    <div class="col-md-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-header">${CVSS_METRIC_LABELS[m]}</div>
+        <div class="card-body p-2">
+          <div class="chart-wrap" style="height:180px;"><canvas id="cvss_${m}"></canvas></div>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  metrics.forEach(m => {
+    const entries = data[m] || [];
+    const ctx = document.getElementById(`cvss_${m}`).getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: entries.map(e => e.label),
+        datasets: [
+          { label: 'V4', data: entries.map(e => e.avg_v4), backgroundColor: V4_COLOR + 'cc', borderColor: V4_COLOR, borderWidth: 1 },
+          { label: 'V5', data: entries.map(e => e.avg_v5), backgroundColor: V5_COLOR + 'cc', borderColor: V5_COLOR, borderWidth: 1 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              footer: items => {
+                const e = entries[items[0].dataIndex];
+                return `Count: ${e.count.toLocaleString()}  Δ: ${e.avg_delta >= 0 ? '+' : ''}${e.avg_delta?.toFixed(4)}`;
+              },
+            },
+          },
+        },
+        scales: {
+          y: { min: 0, title: { display: false }, ticks: { font: { size: 9 } } },
+          x: { ticks: { font: { size: 10 } } },
+        },
+      },
+    });
+  });
+}
+
+// ── Generic field table + chart ───────────────────────────────────────────
+function renderByField(fieldId, data, fieldKey) {
+  const top15 = data.slice(0, 15);
+
+  if (fieldId === 'vendor') {
+    const ctx = document.getElementById('vendorChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: top15.map(d => d[fieldKey]),
+        datasets: [
+          { label: 'V4 Avg', data: top15.map(d => d.avg_v4), backgroundColor: V4_COLOR + 'cc', borderColor: V4_COLOR, borderWidth: 1 },
+          { label: 'V5 Avg', data: top15.map(d => d.avg_v5), backgroundColor: V5_COLOR + 'cc', borderColor: V5_COLOR, borderWidth: 1 },
+        ],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: { legend: { position: 'top' } },
+        scales: {
+          x: { min: 0, title: { display: true, text: 'Avg EPSS Score' } },
+          y: { ticks: { font: { size: 10 } } },
+        },
+      },
+    });
+  }
+
+  const tbody = document.getElementById(`${fieldId}-tbody`);
+  tbody.innerHTML = data.map(d => `
+    <tr>
+      <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${d[fieldKey]}">${d[fieldKey] || '—'}</td>
+      <td>${d.count.toLocaleString()}</td>
+      <td>${scoreBar(d.avg_v4, V4_COLOR)}</td>
+      <td>${scoreBar(d.avg_v5, V5_COLOR)}</td>
+      <td>${deltaPill(d.avg_delta)}</td>
+      <td style="color:#94a3b8;">${fmt(d.median_v4)}</td>
+      <td style="color:#94a3b8;">${fmt(d.median_v5)}</td>
+    </tr>
+  `).join('');
+
+  $(`#${fieldId}-table`).DataTable({
+    paging: true,
+    pageLength: fieldId === 'product' ? 25 : 15,
+    order: [[1, 'desc']],
+    columnDefs: [{ orderable: false, targets: [2,3,4] }],
+  });
+}
+
+// ── Movers ────────────────────────────────────────────────────────────────
+function renderMovers(data) {
+  const tbody = document.getElementById('movers-tbody');
+  tbody.innerHTML = data.map(d => `
+    <tr>
+      <td><a class="cve-link" href="https://www.cve.org/CVERecord?id=${d.cve}" target="_blank" rel="noopener">${d.cve}</a></td>
+      <td>${sevBadge(d.severity)}</td>
+      <td style="color:${V4_COLOR};font-family:monospace;font-size:0.8rem;">${fmt(d.v4)}</td>
+      <td style="color:${V5_COLOR};font-family:monospace;font-size:0.8rem;">${fmt(d.v5)}</td>
+      <td>${deltaPill(d.delta)}</td>
+      <td><code style="font-size:0.72rem;color:#60a5fa;" title="${d.cwe_name}">${d.cwe || '—'}</code></td>
+      <td style="max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${d.vendor}">${d.vendor || '—'}</td>
+      <td style="max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${d.product}">${d.product || '—'}</td>
+      <td style="font-size:0.72rem;">${d.cna || '—'}</td>
+      <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:0.75rem;color:#94a3b8;" title="${d.description}">${d.description || '—'}</td>
+    </tr>
+  `).join('');
+
+  $('#movers-table').DataTable({
+    paging: true,
+    pageLength: 25,
+    order: [[4, 'asc']],
+    columnDefs: [{ orderable: false, targets: [9] }],
+  });
+}
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+init().catch(err => {
+  document.body.insertAdjacentHTML('afterbegin',
+    `<div class="alert alert-danger m-3">Failed to load data: ${err.message}. Run the build script first.</div>`);
+  console.error(err);
+});
+</script>
+</body>
+</html>

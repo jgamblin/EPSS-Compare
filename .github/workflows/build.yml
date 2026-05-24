@@ -1,0 +1,60 @@
+name: Build & Deploy EPSS Report
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      date:
+        description: "Score date (YYYY-MM-DD)"
+        required: false
+        default: "2026-05-22"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Clone CVEProject/cvelistV5 (shallow)
+        run: git clone --depth 1 https://github.com/CVEProject/cvelistV5.git cvelistV5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run build pipeline
+        run: |
+          DATE="${{ github.event.inputs.date || '2026-05-22' }}"
+          python build.py --date "$DATE" --cve-dir ./cvelistV5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
