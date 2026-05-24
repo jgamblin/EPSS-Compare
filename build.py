@@ -1015,9 +1015,10 @@ def build_by_cvss_component(merged: pd.DataFrame) -> dict:
 
 
 def build_by_severity(merged: pd.DataFrame) -> list:
-    order = ["CRITICAL", "HIGH", "MEDIUM", "LOW", "NONE", ""]
+    order = ["CRITICAL", "HIGH", "MEDIUM", "LOW"]
     df = merged.copy()
     df["cvss_severity"] = df["cvss_severity"].fillna("").str.upper()
+    df = df[df["cvss_severity"].isin(order)]
     grp = df.groupby("cvss_severity").agg(
         count=("cve", "count"),
         avg_v4=("epss_v4", "mean"),
