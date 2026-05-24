@@ -1042,8 +1042,15 @@ def build_by_severity(merged: pd.DataFrame) -> list:
     ]
 
 
+EXCLUDE_VALUES = {"n/a", "na", "none", "unknown", "not applicable", "-"}
+
 def build_by_field(merged: pd.DataFrame, field: str, top_n: int) -> list:
-    df = merged[merged[field].notna() & (merged[field] != "") & (merged[field].str.strip() != "")]
+    df = merged[
+        merged[field].notna() &
+        (merged[field] != "") &
+        (merged[field].str.strip() != "") &
+        (~merged[field].str.strip().str.lower().isin(EXCLUDE_VALUES))
+    ]
     grp = df.groupby(field).agg(
         count=("cve", "count"),
         avg_v4=("epss_v4", "mean"),
