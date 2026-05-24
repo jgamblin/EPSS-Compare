@@ -680,15 +680,18 @@ function renderCwe(data) {
       <td><code style="font-size:0.75rem;color:#60a5fa;">${d.cwe}</code></td>
       <td style="max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${d.name}">${d.name}</td>
       <td>${d.count.toLocaleString()}</td>
-      <td style="color:${V4_COLOR}">${fmt(d.avg_v4)}</td>
-      <td style="color:${V5_COLOR}">${fmt(d.avg_v5)}</td>
-      <td>${deltaPill(d.avg_delta)}</td>
+      <td data-order="${d.avg_v4 ?? -1}" style="color:${V4_COLOR}">${fmt(d.avg_v4)}</td>
+      <td data-order="${d.avg_v5 ?? -1}" style="color:${V5_COLOR}">${fmt(d.avg_v5)}</td>
+      <td data-order="${d.avg_delta ?? 0}">${deltaPill(d.avg_delta)}</td>
     </tr>
   `).join('');
 
   $('#cwe-table').DataTable({
     paging: true, pageLength: 15, order: [[2,'desc']],
-    columnDefs: [{ orderable: false, targets: [1] }],
+    columnDefs: [
+      { orderable: false, targets: [1] },
+      { orderSequence: ['desc','asc'], targets: [3,4,5] },
+    ],
   });
 }
 
@@ -800,6 +803,7 @@ function renderByField(fieldId, data, fieldKey) {
     paging: true,
     pageLength: fieldId === 'product' ? 25 : 15,
     order: [[1, 'desc']],
+    columnDefs: [{ orderSequence: ['desc','asc'], targets: [1,2,3,4,5,6] }],
   });
 }
 
