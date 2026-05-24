@@ -788,11 +788,11 @@ function renderByField(fieldId, data, fieldKey) {
     <tr>
       <td style="max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${d[fieldKey]}">${d[fieldKey] || '—'}</td>
       <td>${d.count.toLocaleString()}</td>
-      <td>${scoreBar(d.avg_v4, V4_COLOR)}</td>
-      <td>${scoreBar(d.avg_v5, V5_COLOR)}</td>
-      <td>${deltaPill(d.avg_delta)}</td>
-      <td style="color:#94a3b8;">${fmt(d.median_v4)}</td>
-      <td style="color:#94a3b8;">${fmt(d.median_v5)}</td>
+      <td data-order="${d.avg_v4 ?? -1}">${scoreBar(d.avg_v4, V4_COLOR)}</td>
+      <td data-order="${d.avg_v5 ?? -1}">${scoreBar(d.avg_v5, V5_COLOR)}</td>
+      <td data-order="${d.avg_delta ?? 0}">${deltaPill(d.avg_delta)}</td>
+      <td data-order="${d.median_v4 ?? -1}" style="color:var(--muted);">${fmt(d.median_v4)}</td>
+      <td data-order="${d.median_v5 ?? -1}" style="color:var(--muted);">${fmt(d.median_v5)}</td>
     </tr>
   `).join('');
 
@@ -800,7 +800,6 @@ function renderByField(fieldId, data, fieldKey) {
     paging: true,
     pageLength: fieldId === 'product' ? 25 : 15,
     order: [[1, 'desc']],
-    columnDefs: [{ orderable: false, targets: [2,3,4] }],
   });
 }
 
