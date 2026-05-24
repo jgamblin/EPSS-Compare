@@ -8,63 +8,70 @@
   <link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.bootstrap5.min.css">
   <style>
     :root {
-      --v4-color: #3b82f6;
-      --v5-color: #f59e0b;
-      --up-color: #10b981;
-      --down-color: #ef4444;
-      --neutral-color: #6b7280;
+      --v4-color: #0A7C6E;
+      --v5-color: #FF6B35;
+      --up-color: #0A7C6E;
+      --down-color: #FF6B35;
+      --neutral-color: #888888;
+      --bg: #F4F4F4;
+      --card-bg: #FFFFFF;
+      --border: #DCDCDC;
+      --text: #222222;
+      --muted: #666666;
+      --header-bg: #EFEFEF;
     }
-    body { background: #0f172a; color: #e2e8f0; font-family: 'Segoe UI', system-ui, sans-serif; }
-    .navbar { background: #1e293b !important; border-bottom: 1px solid #334155; }
-    .navbar-brand { font-weight: 700; letter-spacing: -0.5px; }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; }
+    .navbar { background: #FFFFFF !important; border-bottom: 1px solid var(--border); }
+    .navbar-brand { font-weight: 700; letter-spacing: -0.5px; color: var(--text) !important; }
     .badge-v4 { background: var(--v4-color); }
     .badge-v5 { background: var(--v5-color); }
-    .card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; }
-    .card-header { background: #162032; border-bottom: 1px solid #334155; font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; }
-    .stat-card { background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 1.25rem; }
-    .stat-value { font-size: 2rem; font-weight: 700; line-height: 1; }
-    .stat-label { font-size: 0.75rem; color: #94a3b8; margin-top: 0.3rem; text-transform: uppercase; letter-spacing: 0.07em; }
-    .nav-pills .nav-link { color: #94a3b8; border-radius: 8px; font-size: 0.875rem; }
-    .nav-pills .nav-link.active { background: #3b82f6; color: #fff; }
-    .nav-pills .nav-link:hover:not(.active) { background: #334155; color: #e2e8f0; }
-    .section-title { font-size: 1.1rem; font-weight: 600; color: #e2e8f0; margin-bottom: 0.25rem; }
-    .section-sub { font-size: 0.8rem; color: #64748b; margin-bottom: 1.25rem; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; }
+    .card-header { background: var(--header-bg); border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+    .stat-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+    .stat-value { font-size: 2rem; font-weight: 700; line-height: 1; color: var(--text); }
+    .stat-label { font-size: 0.75rem; color: var(--muted); margin-top: 0.3rem; text-transform: uppercase; letter-spacing: 0.07em; }
+    .nav-pills .nav-link { color: var(--muted); border-radius: 8px; font-size: 0.875rem; }
+    .nav-pills .nav-link.active { background: var(--v4-color); color: #fff; }
+    .nav-pills .nav-link:hover:not(.active) { background: var(--header-bg); color: var(--text); }
+    .section-title { font-size: 1.1rem; font-weight: 600; color: var(--text); margin-bottom: 0.25rem; }
+    .section-sub { font-size: 0.8rem; color: var(--muted); margin-bottom: 1.25rem; }
     .chart-wrap { position: relative; width: 100%; }
     .delta-pill { display: inline-block; padding: 0.15em 0.5em; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
-    .delta-up { background: rgba(16,185,129,0.15); color: #10b981; }
-    .delta-down { background: rgba(239,68,68,0.15); color: #ef4444; }
-    .delta-same { background: rgba(107,114,128,0.15); color: #9ca3af; }
-    .sev-CRITICAL { background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
-    .sev-HIGH { background: rgba(249,115,22,0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.3); }
-    .sev-MEDIUM { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
-    .sev-LOW { background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+    .delta-up { background: rgba(10,124,110,0.12); color: #0A7C6E; }
+    .delta-down { background: rgba(255,107,53,0.12); color: #CC4A1A; }
+    .delta-same { background: rgba(136,136,136,0.12); color: #666666; }
+    .sev-CRITICAL { background: rgba(185,28,28,0.1); color: #B91C1C; border: 1px solid rgba(185,28,28,0.25); }
+    .sev-HIGH { background: rgba(194,65,12,0.1); color: #C2410C; border: 1px solid rgba(194,65,12,0.25); }
+    .sev-MEDIUM { background: rgba(180,83,9,0.1); color: #B45309; border: 1px solid rgba(180,83,9,0.25); }
+    .sev-LOW { background: rgba(21,128,61,0.1); color: #15803D; border: 1px solid rgba(21,128,61,0.25); }
     .sev-badge { display: inline-block; padding: 0.15em 0.5em; border-radius: 4px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; }
-    table.dataTable { color: #e2e8f0 !important; }
-    table.dataTable thead th { color: #94a3b8 !important; border-color: #334155 !important; background: #162032 !important; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
-    table.dataTable tbody td { border-color: #334155 !important; font-size: 0.82rem; vertical-align: middle; }
-    table.dataTable tbody tr { background: #1e293b !important; }
-    table.dataTable tbody tr:hover { background: #293548 !important; }
+    table.dataTable { color: var(--text) !important; }
+    table.dataTable thead th { color: var(--muted) !important; border-color: var(--border) !important; background: var(--header-bg) !important; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    table.dataTable tbody td { border-color: var(--border) !important; font-size: 0.82rem; vertical-align: middle; }
+    table.dataTable tbody tr { background: var(--card-bg) !important; }
+    table.dataTable tbody tr:hover { background: #F0FAF9 !important; }
     .dataTables_wrapper .dataTables_filter input,
-    .dataTables_wrapper .dataTables_length select { background: #162032; border: 1px solid #334155; color: #e2e8f0; border-radius: 6px; padding: 0.2rem 0.5rem; }
+    .dataTables_wrapper .dataTables_length select { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 0.2rem 0.5rem; }
     .dataTables_wrapper .dataTables_info,
-    .dataTables_wrapper .dataTables_paginate { color: #64748b; font-size: 0.78rem; }
-    .dataTables_wrapper .dataTables_paginate .paginate_button { color: #94a3b8 !important; }
-    .dataTables_wrapper .dataTables_paginate .paginate_button.current { background: #3b82f6 !important; border-color: #3b82f6 !important; color: #fff !important; border-radius: 4px; }
-    .cve-link { color: #60a5fa; text-decoration: none; font-family: monospace; font-size: 0.8rem; }
-    .cve-link:hover { color: #93c5fd; text-decoration: underline; }
+    .dataTables_wrapper .dataTables_paginate { color: var(--muted); font-size: 0.78rem; }
+    .dataTables_wrapper .dataTables_paginate .paginate_button { color: var(--muted) !important; }
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current { background: var(--v4-color) !important; border-color: var(--v4-color) !important; color: #fff !important; border-radius: 4px; }
+    .cve-link { color: #0A7C6E; text-decoration: none; font-family: monospace; font-size: 0.8rem; }
+    .cve-link:hover { color: #065E53; text-decoration: underline; }
     .legend-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
-    .loading-overlay { display: flex; align-items: center; justify-content: center; min-height: 200px; color: #64748b; }
+    .loading-overlay { display: flex; align-items: center; justify-content: center; min-height: 200px; color: var(--muted); }
     .spinner-border { width: 1.5rem; height: 1.5rem; margin-right: 0.5rem; }
     .score-bar-wrap { display: flex; align-items: center; gap: 6px; }
     .score-bar { height: 4px; border-radius: 2px; min-width: 2px; }
-    .score-val { font-size: 0.78rem; color: #cbd5e1; width: 50px; text-align: right; }
-    #built-at { font-size: 0.7rem; color: #475569; }
+    .score-val { font-size: 0.78rem; color: var(--muted); width: 50px; text-align: right; }
+    #built-at { font-size: 0.7rem; color: var(--muted); }
     .section-anchor { scroll-margin-top: 70px; }
+    .text-secondary { color: var(--muted) !important; }
   </style>
 </head>
 <body>
 
-<nav class="navbar navbar-dark sticky-top">
+<nav class="navbar navbar-light sticky-top">
   <div class="container-fluid">
     <span class="navbar-brand">
       <span class="badge-v4" style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;"></span>
@@ -152,7 +159,7 @@
         </div>
         <div class="col-lg-5">
           <div class="table-responsive">
-            <table class="table table-sm table-dark" id="severity-table">
+            <table class="table table-sm table-light" id="severity-table">
               <thead><tr><th>Severity</th><th>Count</th><th>Avg V4</th><th>Avg V5</th><th>Δ</th></tr></thead>
               <tbody id="severity-tbody"></tbody>
             </table>
@@ -173,7 +180,7 @@
         </div>
         <div class="col-xl-6">
           <div class="table-responsive">
-            <table id="cwe-table" class="table table-sm table-dark w-100">
+            <table id="cwe-table" class="table table-sm table-light w-100">
               <thead><tr><th>CWE</th><th>Name</th><th>Count</th><th>Avg V4</th><th>Avg V5</th><th>Δ</th></tr></thead>
               <tbody id="cwe-tbody"></tbody>
             </table>
@@ -203,7 +210,7 @@
         </div>
         <div class="col-xl-6">
           <div class="table-responsive">
-            <table id="vendor-table" class="table table-sm table-dark w-100">
+            <table id="vendor-table" class="table table-sm table-light w-100">
               <thead><tr><th>Vendor</th><th>CVEs</th><th>Avg V4</th><th>Avg V5</th><th>Δ</th><th>Median V4</th><th>Median V5</th></tr></thead>
               <tbody id="vendor-tbody"></tbody>
             </table>
@@ -219,7 +226,7 @@
     <div class="card-body">
       <div class="section-sub mb-2">Products with the most CVEs and their score comparison.</div>
       <div class="table-responsive">
-        <table id="product-table" class="table table-sm table-dark w-100">
+        <table id="product-table" class="table table-sm table-light w-100">
           <thead><tr><th>Product</th><th>CVEs</th><th>Avg V4</th><th>Avg V5</th><th>Δ</th><th>Median V4</th><th>Median V5</th></tr></thead>
           <tbody id="product-tbody"></tbody>
         </table>
@@ -233,7 +240,7 @@
     <div class="card-body">
       <div class="section-sub mb-2">CVE Numbering Authorities ranked by volume of published CVEs and how their assigned CVEs scored in each model.</div>
       <div class="table-responsive">
-        <table id="cna-table" class="table table-sm table-dark w-100">
+        <table id="cna-table" class="table table-sm table-light w-100">
           <thead><tr><th>CNA</th><th>CVEs</th><th>Avg V4</th><th>Avg V5</th><th>Δ</th><th>Median V4</th><th>Median V5</th></tr></thead>
           <tbody id="cna-tbody"></tbody>
         </table>
@@ -247,7 +254,7 @@
     <div class="card-body">
       <div class="section-sub mb-2">CVEs where the model change had the greatest impact on predicted exploitation probability.</div>
       <div class="table-responsive">
-        <table id="movers-table" class="table table-sm table-dark w-100">
+        <table id="movers-table" class="table table-sm table-light w-100">
           <thead>
             <tr>
               <th>CVE</th><th>Severity</th><th>V4 Score</th><th>V5 Score</th><th>Change</th>
@@ -273,26 +280,26 @@
 
 <script>
 // ── Palette ────────────────────────────────────────────────────────────────
-const V4_COLOR = '#3b82f6';
-const V5_COLOR = '#f59e0b';
-const V4_FILL = 'rgba(59,130,246,0.35)';
-const V5_FILL = 'rgba(245,158,11,0.35)';
-const UP_COLOR = '#10b981';
-const DOWN_COLOR = '#ef4444';
-const NEUTRAL_COLOR = '#6b7280';
+const V4_COLOR = '#0A7C6E';
+const V5_COLOR = '#FF6B35';
+const V4_FILL = 'rgba(10,124,110,0.25)';
+const V5_FILL = 'rgba(255,107,53,0.25)';
+const UP_COLOR = '#0A7C6E';
+const DOWN_COLOR = '#CC4A1A';
+const NEUTRAL_COLOR = '#888888';
 
 const SEV_COLORS = {
-  CRITICAL: '#ef4444',
-  HIGH:     '#f97316',
-  MEDIUM:   '#f59e0b',
-  LOW:      '#22c55e',
-  NONE:     '#6b7280',
-  '':       '#475569',
-  Unknown:  '#475569',
+  CRITICAL: '#B91C1C',
+  HIGH:     '#C2410C',
+  MEDIUM:   '#B45309',
+  LOW:      '#15803D',
+  NONE:     '#888888',
+  '':       '#AAAAAA',
+  Unknown:  '#AAAAAA',
 };
 
-Chart.defaults.color = '#94a3b8';
-Chart.defaults.borderColor = '#1e3a5f22';
+Chart.defaults.color = '#444444';
+Chart.defaults.borderColor = '#DCDCDC';
 Chart.defaults.font.family = "'Segoe UI', system-ui, sans-serif";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
