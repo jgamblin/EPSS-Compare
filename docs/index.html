@@ -224,7 +224,14 @@
   <div id="cvss-section" class="section-anchor card mb-4">
     <div class="card-header">By CVSS v3 Vector Components</div>
     <div class="card-body">
-      <div class="section-sub mb-2">How V4 and V5 scores compare across each CVSS metric dimension (Attack Vector, Complexity, Privileges, Impact, etc.).</div>
+      <div class="section-sub mb-2">How V4 and V5 scores compare across each CVSS metric dimension (Attack Vector, Complexity, Privileges, Impact, etc.). Only the <span id="cvss-pct-label">48.5%</span> of CVEs with CVSS v3 data are included below.</div>
+      <div id="no-cvss-callout" class="alert mb-3" style="display:none;background:rgba(37,99,235,0.07);border:1px solid rgba(37,99,235,0.2);color:#1e3a8a;font-size:0.82rem;">
+        <strong>CVEs without CVSS data respond more strongly to V5:</strong>
+        <span id="no-cvss-count-label"></span> CVEs (<span id="no-cvss-pct-label"></span>% of total) have no CVSS score.
+        Of those, <span id="no-cvss-pct-higher-label"></span>% scored higher in V5 — above the 76.28% overall rate.
+        Their V5 median (<span id="no-cvss-med-v5-label"></span>) is <span id="no-cvss-ratio-label"></span>× their V4 median (<span id="no-cvss-med-v4-label"></span>),
+        suggesting V5 assigns more weight to behavioral signals beyond static vulnerability metadata.
+      </div>
       <div id="cvss-charts" class="row g-3"></div>
     </div>
   </div>
@@ -549,6 +556,24 @@ function renderSummary(d) {
   if (d.cvss_pct !== undefined) {
     const el = document.getElementById('cvss-coverage-note');
     if (el) el.textContent = `${d.cvss_pct}% of CVEs have CVSS data; ${(100 - d.cvss_pct).toFixed(1)}% have no CVSS and are excluded from this breakdown.`;
+    const pctLbl = document.getElementById('cvss-pct-label');
+    if (pctLbl) pctLbl.textContent = `${d.cvss_pct}%`;
+  }
+
+  // No-CVSS callout
+  if (d.no_cvss_count != null && d.no_cvss_median_v4 != null && d.no_cvss_median_v5 != null) {
+    const callout = document.getElementById('no-cvss-callout');
+    if (callout) {
+      const pctOfTotal = d.total_cves ? (d.no_cvss_count / d.total_cves * 100).toFixed(1) : '?';
+      const ratio = d.no_cvss_median_v4 > 0 ? (d.no_cvss_median_v5 / d.no_cvss_median_v4).toFixed(1) : '?';
+      document.getElementById('no-cvss-count-label').textContent = d.no_cvss_count.toLocaleString();
+      document.getElementById('no-cvss-pct-label').textContent = pctOfTotal;
+      document.getElementById('no-cvss-pct-higher-label').textContent = d.no_cvss_pct_higher;
+      document.getElementById('no-cvss-med-v5-label').textContent = d.no_cvss_median_v5;
+      document.getElementById('no-cvss-ratio-label').textContent = ratio;
+      document.getElementById('no-cvss-med-v4-label').textContent = d.no_cvss_median_v4;
+      callout.style.display = '';
+    }
   }
 }
 
