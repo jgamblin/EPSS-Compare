@@ -510,31 +510,38 @@ function renderSummary(d) {
       </div>
     </div>
     <div class="col-12">
-      <div class="stat-card d-flex flex-wrap gap-4 py-2">
-        <div><span class="text-secondary" style="font-size:0.75rem;">V4 MODEL</span><br><span style="font-family:monospace;font-size:0.85rem;color:#60a5fa;">${d.v4_model}</span></div>
-        <div><span class="text-secondary" style="font-size:0.75rem;">V5 BETA MODEL</span><br><span style="font-family:monospace;font-size:0.85rem;color:#fbbf24;">${d.v5_model}</span></div>
-        <div><span class="text-secondary" style="font-size:0.75rem;">SCORE DATE</span><br><span style="font-size:0.85rem;">${d.score_date}</span></div>
-        <div><span class="text-secondary" style="font-size:0.75rem;">HIGHER IN V5</span><br><span style="font-size:0.85rem;">${d.count_higher.toLocaleString()}</span></div>
-        <div><span class="text-secondary" style="font-size:0.75rem;">LOWER IN V5</span><br><span style="font-size:0.85rem;">${d.count_lower.toLocaleString()}</span></div>
-        <div><span class="text-secondary" style="font-size:0.75rem;">UNCHANGED</span><br><span style="font-size:0.85rem;" title="Scores within ±0.001 treated as unchanged">${d.count_same.toLocaleString()} <span style="color:var(--muted);font-size:0.7rem;">±0.001</span></span></div>
-        <div><span class="text-secondary" style="font-size:0.75rem;">MAX INCREASE</span><br><span style="font-size:0.85rem;color:${UP_COLOR}">+${d.delta_max}</span></div>
-        <div><span class="text-secondary" style="font-size:0.75rem;">MAX DECREASE</span><br><span style="font-size:0.85rem;color:${DOWN_COLOR}">${d.delta_min}</span></div>
-        ${Object.values(d.threshold_crossings || {}).map(t => {
-          const pctUp = t.v4_below ? (t.crossed_up / t.v4_below * 100).toFixed(1) : '';
-          const pctDown = t.v4_above ? (t.crossed_down / t.v4_above * 100).toFixed(1) : '';
-          const upTip = t.v4_below ? `${t.crossed_up.toLocaleString()} of ${t.v4_below.toLocaleString()} CVEs below ${(t.threshold*100).toFixed(0)}% in V4 crossed up` : '';
-          const dnTip = t.v4_above ? `${t.crossed_down.toLocaleString()} of ${t.v4_above.toLocaleString()} CVEs above ${(t.threshold*100).toFixed(0)}% in V4 crossed down` : '';
-          return `<div title="Threshold crossings at ${(t.threshold*100).toFixed(0)}%">
-            <span class="text-secondary" style="font-size:0.75rem;">CROSSED ≥${(t.threshold*100).toFixed(0)}%</span><br>
-            <span style="font-size:0.82rem;">
-              <span style="color:${UP_COLOR}" title="${upTip}">▲ ${t.crossed_up.toLocaleString()}${pctUp ? ` <small>(${pctUp}% of below)</small>` : ''}</span>
-              <span style="color:var(--muted);margin:0 2px;">/</span>
-              <span style="color:${DOWN_COLOR}" title="${dnTip}">▼ ${t.crossed_down.toLocaleString()}${pctDown ? ` <small>(${pctDown}% of above)</small>` : ''}</span>
-            </span>
-          </div>`;
-        }).join('')}
+      <div class="stat-card d-flex flex-wrap gap-4 py-2" style="font-size:0.82rem;">
+        <div><span class="text-secondary" style="font-size:0.7rem;">V4 MODEL</span><br><span style="font-family:monospace;color:#60a5fa;">${d.v4_model}</span></div>
+        <div><span class="text-secondary" style="font-size:0.7rem;">V5 BETA MODEL</span><br><span style="font-family:monospace;color:#fbbf24;">${d.v5_model}</span></div>
+        <div><span class="text-secondary" style="font-size:0.7rem;">SCORE DATE</span><br><span>${d.score_date}</span></div>
+        <div style="border-left:1px solid var(--border);padding-left:1rem;"><span class="text-secondary" style="font-size:0.7rem;">HIGHER IN V5</span><br><span>${d.count_higher.toLocaleString()}</span></div>
+        <div><span class="text-secondary" style="font-size:0.7rem;">LOWER IN V5</span><br><span>${d.count_lower.toLocaleString()}</span></div>
+        <div><span class="text-secondary" style="font-size:0.7rem;">UNCHANGED</span><br><span title="Scores within ±0.001 treated as unchanged">${d.count_same.toLocaleString()} <span style="color:var(--muted);font-size:0.68rem;">±0.001</span></span></div>
+        <div style="border-left:1px solid var(--border);padding-left:1rem;"><span class="text-secondary" style="font-size:0.7rem;">MAX INCREASE</span><br><span style="color:${UP_COLOR}">+${d.delta_max}</span></div>
+        <div><span class="text-secondary" style="font-size:0.7rem;">MAX DECREASE</span><br><span style="color:${DOWN_COLOR}">${d.delta_min}</span></div>
       </div>
     </div>
+    ${Object.values(d.threshold_crossings || {}).map(t => {
+      const pctUp = t.v4_below ? (t.crossed_up / t.v4_below * 100).toFixed(1) : '';
+      const pctDown = t.v4_above ? (t.crossed_down / t.v4_above * 100).toFixed(1) : '';
+      const net = t.crossed_up - t.crossed_down;
+      const upTip = t.v4_below ? `${t.crossed_up.toLocaleString()} of ${t.v4_below.toLocaleString()} CVEs below ${(t.threshold*100).toFixed(0)}% in V4 crossed up` : '';
+      const dnTip = t.v4_above ? `${t.crossed_down.toLocaleString()} of ${t.v4_above.toLocaleString()} CVEs above ${(t.threshold*100).toFixed(0)}% in V4 crossed down` : '';
+      return `<div class="col-6 col-lg-3">
+        <div class="stat-card h-100 py-2">
+          <div class="text-secondary mb-1" style="font-size:0.7rem;letter-spacing:0.04em;">THRESHOLD CROSSINGS ≥${(t.threshold*100).toFixed(0)}%</div>
+          <div style="font-size:0.85rem;margin-bottom:2px;" title="${upTip}">
+            <span style="color:${UP_COLOR}">▲ ${t.crossed_up.toLocaleString()}</span>
+            ${pctUp ? `<span style="color:var(--muted);font-size:0.75rem;"> (${pctUp}% of below)</span>` : ''}
+          </div>
+          <div style="font-size:0.85rem;margin-bottom:6px;" title="${dnTip}">
+            <span style="color:${DOWN_COLOR}">▼ ${t.crossed_down.toLocaleString()}</span>
+            ${pctDown ? `<span style="color:var(--muted);font-size:0.75rem;"> (${pctDown}% of above)</span>` : ''}
+          </div>
+          <div style="font-size:0.75rem;color:var(--muted);border-top:1px solid var(--border);padding-top:4px;">net <span style="color:${net >= 0 ? UP_COLOR : DOWN_COLOR};font-weight:600;">${net >= 0 ? '+' : ''}${net.toLocaleString()}</span></div>
+        </div>
+      </div>`;
+    }).join('')}
   `;
 
   // Show the threshold reconciliation note
