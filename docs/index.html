@@ -509,29 +509,17 @@ function renderSummary(d) {
         <div class="stat-label">Median Score Shift</div>
       </div>
     </div>
-    <div class="col-6 col-md-3 col-lg">
-      <div class="stat-card text-center py-2"><span class="text-secondary d-block" style="font-size:0.68rem;">V4 MODEL</span><span style="font-family:monospace;font-size:0.82rem;color:#60a5fa;">${d.v4_model}</span></div>
-    </div>
-    <div class="col-6 col-md-3 col-lg">
-      <div class="stat-card text-center py-2"><span class="text-secondary d-block" style="font-size:0.68rem;">V5 BETA MODEL</span><span style="font-family:monospace;font-size:0.82rem;color:#fbbf24;">${d.v5_model}</span></div>
-    </div>
-    <div class="col-6 col-md-3 col-lg">
-      <div class="stat-card text-center py-2"><span class="text-secondary d-block" style="font-size:0.68rem;">SCORE DATE</span><span style="font-size:0.82rem;">${d.score_date}</span></div>
-    </div>
-    <div class="col-6 col-md-3 col-lg">
-      <div class="stat-card text-center py-2"><span class="text-secondary d-block" style="font-size:0.68rem;">HIGHER IN V5</span><span style="font-size:0.82rem;">${d.count_higher.toLocaleString()}</span></div>
-    </div>
-    <div class="col-6 col-md-3 col-lg">
-      <div class="stat-card text-center py-2"><span class="text-secondary d-block" style="font-size:0.68rem;">LOWER IN V5</span><span style="font-size:0.82rem;">${d.count_lower.toLocaleString()}</span></div>
-    </div>
-    <div class="col-6 col-md-3 col-lg">
-      <div class="stat-card text-center py-2"><span class="text-secondary d-block" style="font-size:0.68rem;">UNCHANGED</span><span style="font-size:0.82rem;" title="Scores within ±0.001">${d.count_same.toLocaleString()} <span style="color:var(--muted);font-size:0.68rem;">±0.001</span></span></div>
-    </div>
-    <div class="col-6 col-md-3 col-lg">
-      <div class="stat-card text-center py-2"><span class="text-secondary d-block" style="font-size:0.68rem;">MAX INCREASE</span><span style="font-size:0.82rem;color:${UP_COLOR}">+${d.delta_max}</span></div>
-    </div>
-    <div class="col-6 col-md-3 col-lg">
-      <div class="stat-card text-center py-2"><span class="text-secondary d-block" style="font-size:0.68rem;">MAX DECREASE</span><span style="font-size:0.82rem;color:${DOWN_COLOR}">${d.delta_min}</span></div>
+    <div class="col-12">
+      <div class="stat-card d-flex justify-content-between align-items-center flex-wrap py-2" style="font-size:0.82rem;gap:0.5rem 0;">
+        <div class="text-center px-3"><span class="text-secondary d-block" style="font-size:0.68rem;">V4 MODEL</span><span style="font-family:monospace;color:#60a5fa;">${d.v4_model}</span></div>
+        <div class="text-center px-3" style="border-left:1px solid var(--border);"><span class="text-secondary d-block" style="font-size:0.68rem;">V5 BETA MODEL</span><span style="font-family:monospace;color:#fbbf24;">${d.v5_model}</span></div>
+        <div class="text-center px-3" style="border-left:1px solid var(--border);"><span class="text-secondary d-block" style="font-size:0.68rem;">SCORE DATE</span><span>${d.score_date}</span></div>
+        <div class="text-center px-3" style="border-left:1px solid var(--border);"><span class="text-secondary d-block" style="font-size:0.68rem;">HIGHER IN V5</span><span>${d.count_higher.toLocaleString()}</span></div>
+        <div class="text-center px-3" style="border-left:1px solid var(--border);"><span class="text-secondary d-block" style="font-size:0.68rem;">LOWER IN V5</span><span>${d.count_lower.toLocaleString()}</span></div>
+        <div class="text-center px-3" style="border-left:1px solid var(--border);"><span class="text-secondary d-block" style="font-size:0.68rem;">UNCHANGED</span><span title="Scores within ±0.001 treated as unchanged">${d.count_same.toLocaleString()} <span style="color:var(--muted);font-size:0.68rem;">±0.001</span></span></div>
+        <div class="text-center px-3" style="border-left:1px solid var(--border);"><span class="text-secondary d-block" style="font-size:0.68rem;">MAX INCREASE</span><span style="color:${UP_COLOR}">+${d.delta_max}</span></div>
+        <div class="text-center px-3" style="border-left:1px solid var(--border);"><span class="text-secondary d-block" style="font-size:0.68rem;">MAX DECREASE</span><span style="color:${DOWN_COLOR}">${d.delta_min}</span></div>
+      </div>
     </div>
     ${Object.values(d.threshold_crossings || {}).map(t => {
       const pctUp = t.v4_below ? (t.crossed_up / t.v4_below * 100).toFixed(1) : '';
