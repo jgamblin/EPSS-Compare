@@ -666,7 +666,7 @@ function renderScatter(points, filterAbove) {
     bySev[sev].push({ x: p.v4, y: p.v5, cve: p.cve, d: p.d });
   });
 
-  const axisMax = filterAbove ? Math.min(1, Math.max(...filtered.map(p => Math.max(p.v4, p.v5))) * 1.05) : 1;
+  const useLog = !!filterAbove;
 
   const datasets = Object.entries(bySev).map(([sev, pts]) => ({
     label: sev || 'Unknown',
@@ -677,10 +677,12 @@ function renderScatter(points, filterAbove) {
     pointHoverRadius: 5,
   }));
 
-  // Diagonal reference line
+  // Diagonal reference line — log-friendly range 0.01–1
   datasets.push({
     label: 'V4 = V5 (no change)',
-    data: [{x:0,y:0},{x:axisMax,y:axisMax}],
+    data: useLog
+      ? [{x:0.01,y:0.01},{x:0.1,y:0.1},{x:0.2,y:0.2},{x:0.5,y:0.5},{x:1,y:1}]
+      : [{x:0,y:0},{x:1,y:1}],
     type: 'line',
     borderColor: '#475569',
     borderDash: [6,3],
@@ -688,6 +690,10 @@ function renderScatter(points, filterAbove) {
     pointRadius: 0,
     fill: false,
   });
+
+  const axisOpts = useLog
+    ? { type: 'logarithmic', min: 0.01, max: 1, ticks: { callback: v => v >= 0.01 ? v : null } }
+    : { type: 'linear', min: 0, max: 1 };
 
   const ctx = document.getElementById('scatterChart').getContext('2d');
   if (scatterChart) scatterChart.destroy();
@@ -715,8 +721,8 @@ function renderScatter(points, filterAbove) {
         },
       },
       scales: {
-        x: { min: 0, max: axisMax, title: { display: true, text: 'EPSS V4 Score' } },
-        y: { min: 0, max: axisMax, title: { display: true, text: 'EPSS V5 Beta Score' } },
+        x: { ...axisOpts, title: { display: true, text: useLog ? 'EPSS V4 Score (log scale)' : 'EPSS V4 Score' } },
+        y: { ...axisOpts, title: { display: true, text: useLog ? 'EPSS V5 Beta Score (log scale)' : 'EPSS V5 Beta Score' } },
       },
     },
   });
