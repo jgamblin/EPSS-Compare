@@ -139,9 +139,12 @@
 
   <!-- Scatter -->
   <div id="scatter-section" class="section-anchor card mb-4">
-    <div class="card-header">Score Correlation — V4 vs V5 (5,000 sampled CVEs)</div>
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <span>Score Correlation — V4 vs V5 (5,000 sampled CVEs)</span>
+      <button class="btn btn-sm btn-outline-secondary" id="scatter-filter-btn" onclick="toggleScatterFilter()">Filter: score &gt; 0.01</button>
+    </div>
     <div class="card-body">
-      <div class="section-sub mb-2">Each point is a CVE. Points above the diagonal line scored <em>higher</em> in V5; below = lower. Colored by CVSS severity. <strong>Sampling note:</strong> 77% of CVEs have V4 scores below 0.01 and cluster invisibly in the bottom-left corner; the chart uses a proportional stratified sample across 10 score buckets to make the high-score region visible.</div>
+      <div class="section-sub mb-2" id="scatter-sub">Each point is a CVE. Points above the diagonal line scored <em>higher</em> in V5; below = lower. Colored by CVSS severity. <strong>Sampling note:</strong> 77% of CVEs have V4 scores below 0.01 and cluster invisibly in the bottom-left corner; the chart uses a proportional stratified sample across 10 score buckets to make the high-score region visible.</div>
       <div class="chart-wrap" style="height:420px;">
         <canvas id="scatterChart"></canvas>
       </div>
@@ -418,6 +421,9 @@ document.querySelectorAll('#section-nav a').forEach(a => {
 
 // ── Main loader ────────────────────────────────────────────────────────────
 let distChart, distLogMode = false;
+let scatterChart = null;
+let scatterData = null;
+let scatterFilterMode = false;
 let distData = null;
 let summaryData = null;
 let deltaChart, deltaLogMode = false;
@@ -452,7 +458,8 @@ async function init() {
   renderSummary(summary);
   distData = dist;
   renderDistribution(dist, false);
-  renderScatter(scatter);
+  scatterData = scatter;
+  renderScatter(scatter, scatterFilterMode);
   deltaData = delta;
   renderDelta(delta, false);
   sevData = bySev;
@@ -648,13 +655,18 @@ function toggleDistLog() {
 }
 
 // ── Scatter chart ─────────────────────────────────────────────────────────
-function renderScatter(points) {
+function renderScatter(points, filterAbove) {
+  const threshold = 0.01;
+  const filtered = filterAbove ? points.filter(p => p.v4 > threshold || p.v5 > threshold) : points;
+
   const bySev = {};
-  points.forEach(p => {
+  filtered.forEach(p => {
     const sev = p.sev || 'Unknown';
     if (!bySev[sev]) bySev[sev] = [];
     bySev[sev].push({ x: p.v4, y: p.v5, cve: p.cve, d: p.d });
   });
+
+  const axisMax = filterAbove ? Math.min(1, Math.max(...filtered.map(p => Math.max(p.v4, p.v5))) * 1.05) : 1;
 
   const datasets = Object.entries(bySev).map(([sev, pts]) => ({
     label: sev || 'Unknown',
@@ -668,7 +680,7 @@ function renderScatter(points) {
   // Diagonal reference line
   datasets.push({
     label: 'V4 = V5 (no change)',
-    data: [{x:0,y:0},{x:1,y:1}],
+    data: [{x:0,y:0},{x:axisMax,y:axisMax}],
     type: 'line',
     borderColor: '#475569',
     borderDash: [6,3],
@@ -678,7 +690,8 @@ function renderScatter(points) {
   });
 
   const ctx = document.getElementById('scatterChart').getContext('2d');
-  new Chart(ctx, {
+  if (scatterChart) scatterChart.destroy();
+  scatterChart = new Chart(ctx, {
     type: 'scatter',
     data: { datasets },
     options: {
@@ -702,14 +715,30 @@ function renderScatter(points) {
         },
       },
       scales: {
-        x: { min: 0, max: 1, title: { display: true, text: 'EPSS V4 Score' } },
-        y: { min: 0, max: 1, title: { display: true, text: 'EPSS V5 Beta Score' } },
+        x: { min: 0, max: axisMax, title: { display: true, text: 'EPSS V4 Score' } },
+        y: { min: 0, max: axisMax, title: { display: true, text: 'EPSS V5 Beta Score' } },
       },
     },
   });
 
+  // Update subtitle
+  const sub = document.getElementById('scatter-sub');
+  if (sub) {
+    sub.innerHTML = filterAbove
+      ? `Showing ${filtered.length.toLocaleString()} of 5,000 sampled CVEs with score &gt; 0.01 in either model. Points above the diagonal scored <em>higher</em> in V5; below = lower. Colored by CVSS severity. Axes auto-scaled to the filtered range.`
+      : `Each point is a CVE. Points above the diagonal line scored <em>higher</em> in V5; below = lower. Colored by CVSS severity. <strong>Sampling note:</strong> 77% of CVEs have V4 scores below 0.01 and cluster invisibly in the bottom-left corner; the chart uses a proportional stratified sample across 10 score buckets to make the high-score region visible.`;
+  }
+
+  // Update button state
+  const btn = document.getElementById('scatter-filter-btn');
+  if (btn) {
+    btn.classList.toggle('btn-primary', !!filterAbove);
+    btn.classList.toggle('btn-outline-secondary', !filterAbove);
+  }
+
   // Legend
   const leg = document.getElementById('scatter-legend');
+  leg.innerHTML = '';
   const sevOrder = ['CRITICAL','HIGH','MEDIUM','LOW','NONE','Unknown'];
   sevOrder.filter(s => bySev[s]).forEach(s => {
     const el = document.createElement('span');
@@ -717,6 +746,11 @@ function renderScatter(points) {
     el.innerHTML = `<span class="legend-dot" style="background:${SEV_COLORS[s.toUpperCase()]||'#475569'}"></span>${s} (${bySev[s].length.toLocaleString()})`;
     leg.appendChild(el);
   });
+}
+
+function toggleScatterFilter() {
+  scatterFilterMode = !scatterFilterMode;
+  if (scatterData) renderScatter(scatterData, scatterFilterMode);
 }
 
 // ── Delta distribution ────────────────────────────────────────────────────
