@@ -282,8 +282,9 @@ async function init() {
   let caveatHtml = '<strong>Provisional data. Read before sharing.</strong> ';
   if (v5ZeroDays.length > 0) {
     const zeroDates = v5ZeroDays.map(d => d.date).join(', ');
-    caveatHtml += `V5 Beta scores were unchanged on ${zeroDates} — no CVE changed score on those days, which means V5 likely did not publish new scores. `;
-    caveatHtml += `V5 velocity calculations are effectively based on ${windowDays - v5ZeroDays.length} publishing days, not ${windowDays}. `;
+    const activeDays = windowDays - v5ZeroDays.length;
+    caveatHtml += `V5 Beta did not publish a new file on ${zeroDates}. The V5 score file was identical on those days — no scores changed and no new CVEs were added. V4 continued publishing normally throughout the window. `;
+    caveatHtml += `V5 velocity is therefore based on ${activeDays} publishing days out of ${windowDays}. `;
   }
   caveatHtml += `Slope is a linear regression over the ${windowDays}-day window. A single score jump on any one day looks the same as a sustained trend. All quadrant and velocity findings should be treated as exploratory.`;
   document.getElementById('caveat-text').innerHTML = caveatHtml;
