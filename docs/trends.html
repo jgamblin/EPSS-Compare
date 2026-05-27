@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EPSS V4 vs V5 Beta — Score Trends</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdn.datatables.net/2.0.8/css/dataTables.bootstrap5.min.css">
+  <style>
+    :root {
+      --v4-color: #0A7C6E;
+      --v5-color: #FF6B35;
+      --up-color: #0A7C6E;
+      --down-color: #CC4A1A;
+      --bg: #F4F4F4;
+      --card-bg: #FFFFFF;
+      --border: #DCDCDC;
+      --text: #222222;
+      --muted: #666666;
+      --header-bg: #EFEFEF;
+    }
+    body { background: var(--bg); color: var(--text); font-family: 'Segoe UI', system-ui, sans-serif; }
+    .navbar { background: #FFFFFF !important; border-bottom: 1px solid var(--border); }
+    .navbar-brand { font-weight: 700; letter-spacing: -0.5px; color: var(--text) !important; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; }
+    .card-header { background: var(--header-bg); border-bottom: 1px solid var(--border); font-weight: 600; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+    .stat-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 1.25rem; }
+    .stat-value { font-size: 1.6rem; font-weight: 700; line-height: 1; }
+    .stat-label { font-size: 0.72rem; color: var(--muted); margin-top: 0.3rem; text-transform: uppercase; letter-spacing: 0.07em; }
+    .section-sub { font-size: 0.8rem; color: var(--muted); margin-bottom: 1rem; }
+    .chart-wrap { position: relative; width: 100%; }
+    .delta-pill { display: inline-block; padding: 0.15em 0.5em; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+    .delta-up { background: rgba(10,124,110,0.12); color: #0A7C6E; }
+    .delta-down { background: rgba(204,74,26,0.12); color: #CC4A1A; }
+    .delta-same { background: rgba(136,136,136,0.12); color: #666; }
+    .sev-badge { display: inline-block; padding: 0.15em 0.5em; border-radius: 4px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; }
+    .sev-CRITICAL { background: rgba(185,28,28,0.1); color: #B91C1C; border: 1px solid rgba(185,28,28,0.25); }
+    .sev-HIGH { background: rgba(194,65,12,0.1); color: #C2410C; border: 1px solid rgba(194,65,12,0.25); }
+    .sev-MEDIUM { background: rgba(180,83,9,0.1); color: #B45309; border: 1px solid rgba(180,83,9,0.25); }
+    .sev-LOW { background: rgba(21,128,61,0.1); color: #15803D; border: 1px solid rgba(21,128,61,0.25); }
+    table.dataTable { color: var(--text) !important; }
+    table.dataTable thead th { color: var(--muted) !important; border-color: var(--border) !important; background: var(--header-bg) !important; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; }
+    table.dataTable tbody td { border-color: var(--border) !important; font-size: 0.82rem; vertical-align: middle; }
+    table.dataTable tbody tr { background: var(--card-bg) !important; }
+    table.dataTable tbody tr:hover { background: #F0FAF9 !important; }
+    .dataTables_wrapper .dataTables_filter input,
+    .dataTables_wrapper .dataTables_length select { background: var(--bg); border: 1px solid var(--border); color: var(--text); border-radius: 6px; padding: 0.2rem 0.5rem; }
+    .dataTables_wrapper .dataTables_info,
+    .dataTables_wrapper .dataTables_paginate { color: var(--muted); font-size: 0.78rem; }
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current { background: var(--v4-color) !important; border-color: var(--v4-color) !important; color: #fff !important; border-radius: 4px; }
+    .cve-link { color: #0A7C6E; text-decoration: none; font-family: monospace; font-size: 0.8rem; }
+    .cve-link:hover { text-decoration: underline; }
+    .quad-box { border: 1px solid var(--border); border-radius: 8px; padding: 1rem; text-align: center; }
+    .quad-count { font-size: 1.4rem; font-weight: 700; }
+    .section-anchor { scroll-margin-top: 70px; }
+    .sparkline-cell { white-space: nowrap; }
+    .text-secondary { color: var(--muted) !important; }
+    #built-at { font-size: 0.7rem; color: var(--muted); }
+  </style>
+</head>
+<body>
+
+<nav class="navbar navbar-light sticky-top">
+  <div class="container-fluid">
+    <span class="navbar-brand">
+      <span style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;background:#0A7C6E;"></span>
+      EPSS V4
+      <span class="mx-1 text-secondary">vs</span>
+      <span style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;background:#FF6B35;"></span>
+      V5 Beta — Score Trends
+    </span>
+    <span class="d-flex align-items-center gap-3">
+      <a href="index.html" class="text-secondary" style="font-size:0.8rem;">Point-in-time report</a>
+      <span id="built-at"></span>
+    </span>
+  </div>
+</nav>
+
+<div class="container-fluid px-3 px-lg-4 py-4" style="max-width:1400px; margin:0 auto;">
+
+  <div class="mb-3">
+    <div style="font-size:1.1rem;font-weight:600;">Score Trajectory Comparison</div>
+    <div class="text-secondary" style="font-size:0.82rem;" id="date-range-sub">Loading...</div>
+  </div>
+
+  <!-- Nav -->
+  <ul class="nav nav-pills flex-wrap gap-1 mb-4">
+    <li class="nav-item"><a class="nav-link active" href="#daily-section">Daily Averages</a></li>
+    <li class="nav-item"><a class="nav-link" href="#quadrant-section">Velocity Quadrants</a></li>
+    <li class="nav-item"><a class="nav-link" href="#risers-section">Top Risers (V5)</a></li>
+    <li class="nav-item"><a class="nav-link" href="#fallers-section">Top Fallers (V5)</a></li>
+    <li class="nav-item"><a class="nav-link" href="#diverging-section">Diverging CVEs</a></li>
+    <li class="nav-item"><a class="nav-link" href="#stability-section">Stability</a></li>
+  </ul>
+
+  <!-- Daily Averages -->
+  <div id="daily-section" class="section-anchor card mb-4">
+    <div class="card-header">Daily Average Scores — V4 vs V5 Beta</div>
+    <div class="card-body">
+      <div class="section-sub">Mean and median EPSS scores across all CVEs per day. Shows whether the overall score distribution is shifting over time in each model.</div>
+      <div class="row g-3 mb-3" id="daily-stat-cards"></div>
+      <div class="row g-3">
+        <div class="col-lg-6">
+          <div class="chart-wrap" style="height:300px;"><canvas id="dailyMeanChart"></canvas></div>
+        </div>
+        <div class="col-lg-6">
+          <div class="chart-wrap" style="height:300px;"><canvas id="dailyMedianChart"></canvas></div>
+        </div>
+      </div>
+      <div class="row g-3 mt-1">
+        <div class="col-12">
+          <div class="chart-wrap" style="height:260px;"><canvas id="dailyMovementChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Velocity Quadrants -->
+  <div id="quadrant-section" class="section-anchor card mb-4">
+    <div class="card-header">Velocity Quadrants — Which direction are scores trending?</div>
+    <div class="card-body">
+      <div class="section-sub">Each CVE is classified by the slope of its V4 and V5 scores over the window. CVEs in opposite quadrants are moving in different directions between models.</div>
+      <div class="row g-3 mb-4" id="quad-cards"></div>
+      <div class="section-sub mt-2">Slope scatter — each point is a CVE. Points in the upper-left (V5 rising, V4 flat/falling) or lower-right (V4 rising, V5 falling) show model divergence.</div>
+      <div class="chart-wrap" style="height:380px;"><canvas id="quadScatterChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Top Risers -->
+  <div id="risers-section" class="section-anchor card mb-4">
+    <div class="card-header">Top 50 Risers in V5 Beta</div>
+    <div class="card-body">
+      <div class="section-sub">CVEs with the steepest upward V5 slope over the window — scored against their V4 trajectory. These are CVEs V5 is increasingly prioritizing that V4 may be missing.</div>
+      <div class="table-responsive">
+        <table id="risers-table" class="table table-sm table-light w-100">
+          <thead><tr>
+            <th>CVE</th><th>Sev</th>
+            <th>V5 Slope</th><th>V4 Slope</th>
+            <th>V5 Scores</th><th>V4 Scores</th>
+            <th>Vendor</th><th>Description</th>
+          </tr></thead>
+          <tbody id="risers-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top Fallers -->
+  <div id="fallers-section" class="section-anchor card mb-4">
+    <div class="card-header">Top 50 Fallers in V5 Beta</div>
+    <div class="card-body">
+      <div class="section-sub">CVEs with the steepest downward V5 slope — scored against their V4 trajectory. These are CVEs V5 is de-prioritizing that V4 keeps stable or elevated.</div>
+      <div class="table-responsive">
+        <table id="fallers-table" class="table table-sm table-light w-100">
+          <thead><tr>
+            <th>CVE</th><th>Sev</th>
+            <th>V5 Slope</th><th>V4 Slope</th>
+            <th>V5 Scores</th><th>V4 Scores</th>
+            <th>Vendor</th><th>Description</th>
+          </tr></thead>
+          <tbody id="fallers-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Diverging -->
+  <div id="diverging-section" class="section-anchor card mb-4">
+    <div class="card-header">Diverging CVEs — V4 and V5 Moving in Opposite Directions</div>
+    <div class="card-body">
+      <div class="section-sub">CVEs where V4 is trending up while V5 trends down, or vice versa. These are the most analytically significant cases for understanding model differences.</div>
+      <div class="table-responsive">
+        <table id="diverging-table" class="table table-sm table-light w-100">
+          <thead><tr>
+            <th>CVE</th><th>Sev</th>
+            <th>V4 Slope</th><th>V5 Slope</th>
+            <th>V4 Scores</th><th>V5 Scores</th>
+            <th>Vendor</th><th>Description</th>
+          </tr></thead>
+          <tbody id="diverging-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stability -->
+  <div id="stability-section" class="section-anchor card mb-4">
+    <div class="card-header">Score Stability — Day-to-Day Volatility Comparison</div>
+    <div class="card-body">
+      <div class="section-sub">How much do scores move day-to-day in each model? Higher volatility means scores are changing more between model runs.</div>
+      <div class="row g-3">
+        <div class="col-md-4" id="stability-stats"></div>
+        <div class="col-md-8">
+          <div class="chart-wrap" style="height:280px;"><canvas id="stabilityChart"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="text-secondary mt-4 mb-2" style="font-size:0.75rem;">
+    Data: EPSS by FIRST.org &amp; Cyentia Institute &nbsp;·&nbsp; <a href="https://github.com/jgamblin/EPSS-Compare" class="text-secondary">EPSS-Compare</a> &nbsp;·&nbsp; <a href="index.html" class="text-secondary">Point-in-time report</a>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.7.1/dist/jquery.min.js"></script>
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/2.0.8/js/dataTables.bootstrap5.min.js"></script>
+
+<script>
+const V4_COLOR = '#0A7C6E';
+const V5_COLOR = '#FF6B35';
+const V4_FILL = 'rgba(10,124,110,0.15)';
+const V5_FILL = 'rgba(255,107,53,0.15)';
+
+const SEV_COLORS = { CRITICAL:'#B91C1C', HIGH:'#C2410C', MEDIUM:'#B45309', LOW:'#15803D', NONE:'#475569' };
+
+const fmt4 = v => (v == null) ? '—' : v.toFixed(4);
+const fmt5 = v => (v == null) ? '—' : v.toFixed(5);
+
+function fetchJSON(path) {
+  return fetch(path).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
+}
+
+function slopePill(v) {
+  if (v == null) return '<span class="delta-pill delta-same">—</span>';
+  const cls = v > 0.0005 ? 'delta-up' : v < -0.0005 ? 'delta-down' : 'delta-same';
+  const sign = v > 0.0005 ? '+' : '';
+  return `<span class="delta-pill ${cls}">${sign}${v.toFixed(5)}</span>`;
+}
+
+function sevBadge(s) {
+  if (!s) return '';
+  return `<span class="sev-badge sev-${s}">${s}</span>`;
+}
+
+function sparkline(scores, color) {
+  if (!scores || scores.length === 0) return '';
+  const max = Math.max(...scores, 0.001);
+  const w = 6, h = 20, gap = 2;
+  const bars = scores.map(v => {
+    const barH = Math.max(2, Math.round((v / max) * h));
+    return `<rect x="0" y="${h - barH}" width="${w}" height="${barH}" fill="${color}" opacity="0.8"/>`;
+  });
+  const width = scores.length * (w + gap) - gap;
+  const wrapped = bars.map((b, i) => `<g transform="translate(${i*(w+gap)},0)">${b}</g>`).join('');
+  return `<svg width="${width}" height="${h}" style="vertical-align:middle;">${wrapped}</svg>`;
+}
+
+async function init() {
+  const base = 'data/trends/';
+  const [daily, quads, quadScatter, risers, fallers, diverging, stability, meta] = await Promise.all([
+    fetchJSON(base + 'daily_summary.json'),
+    fetchJSON(base + 'velocity_quadrants.json'),
+    fetchJSON(base + 'quad_scatter.json'),
+    fetchJSON(base + 'top_risers_v5.json'),
+    fetchJSON(base + 'top_fallers_v5.json'),
+    fetchJSON(base + 'diverging.json'),
+    fetchJSON(base + 'stability.json'),
+    fetchJSON(base + 'meta.json'),
+  ]);
+
+  // Built-at
+  if (meta.built_at) {
+    document.getElementById('built-at').textContent = 'Built: ' + new Date(meta.built_at).toLocaleString();
+  }
+  if (meta.dates && meta.dates.length) {
+    document.getElementById('date-range-sub').textContent =
+      `${meta.dates[0]} to ${meta.dates[meta.dates.length-1]} · ${meta.dates.length} days · ${(meta.total_cves||0).toLocaleString()} CVEs`;
+  }
+
+  renderDaily(daily);
+  renderQuadrants(quads, quadScatter);
+  renderTrendTable('risers', risers, 'v5_slope', 'desc');
+  renderTrendTable('fallers', fallers, 'v5_slope', 'asc');
+  renderDivergingTable(diverging);
+  renderStability(stability);
+
+  // Smooth scroll for nav pills
+  document.querySelectorAll('.nav-link').forEach(a => {
+    a.addEventListener('click', e => {
+      e.preventDefault();
+      document.querySelectorAll('.nav-link').forEach(x => x.classList.remove('active'));
+      a.classList.add('active');
+      const target = document.querySelector(a.getAttribute('href'));
+      if (target) target.scrollIntoView({ behavior: 'smooth' });
+    });
+  });
+}
+
+// ── Daily averages ────────────────────────────────────────────────────────────
+function renderDaily(daily) {
+  const dates = daily.map(d => d.date);
+  const last = daily[daily.length - 1];
+  const prev = daily.length > 1 ? daily[daily.length - 2] : null;
+
+  // Stat cards from last day
+  const cards = [
+    { label: 'V4 Median', val: last.v4_median, color: V4_COLOR },
+    { label: 'V5 Median', val: last.v5_median, color: V5_COLOR },
+    { label: 'V4 Mean', val: last.v4_mean, color: V4_COLOR },
+    { label: 'V5 Mean', val: last.v5_mean, color: V5_COLOR },
+  ];
+  if (prev) {
+    cards.push({ label: 'V5 % Up (day)', val: last.v5_pct_up + '%', color: '#0A7C6E', raw: true });
+    cards.push({ label: 'V5 % Down (day)', val: last.v5_pct_down + '%', color: '#CC4A1A', raw: true });
+  }
+
+  document.getElementById('daily-stat-cards').innerHTML = cards.map(c => `
+    <div class="col-6 col-md-4 col-lg-2">
+      <div class="stat-card text-center py-2">
+        <div class="stat-value" style="font-size:1.3rem;color:${c.color};">${c.raw ? c.val : fmt4(c.val)}</div>
+        <div class="stat-label">${c.label}</div>
+      </div>
+    </div>`).join('');
+
+  // Mean chart
+  new Chart(document.getElementById('dailyMeanChart'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [
+        { label: 'V4 Mean', data: daily.map(d => d.v4_mean), borderColor: V4_COLOR, backgroundColor: V4_FILL, fill: true, tension: 0.3, pointRadius: 4 },
+        { label: 'V5 Mean', data: daily.map(d => d.v5_mean), borderColor: V5_COLOR, backgroundColor: V5_FILL, fill: true, tension: 0.3, pointRadius: 4 },
+      ],
+    },
+    options: { responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { position: 'top' }, title: { display: true, text: 'Mean Score by Day' } },
+      scales: { y: { min: 0, title: { display: true, text: 'Mean EPSS Score' } } },
+    },
+  });
+
+  // Median chart
+  new Chart(document.getElementById('dailyMedianChart'), {
+    type: 'line',
+    data: {
+      labels: dates,
+      datasets: [
+        { label: 'V4 Median', data: daily.map(d => d.v4_median), borderColor: V4_COLOR, backgroundColor: V4_FILL, fill: true, tension: 0.3, pointRadius: 4 },
+        { label: 'V5 Median', data: daily.map(d => d.v5_median), borderColor: V5_COLOR, backgroundColor: V5_FILL, fill: true, tension: 0.3, pointRadius: 4 },
+      ],
+    },
+    options: { responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { position: 'top' }, title: { display: true, text: 'Median Score by Day' } },
+      scales: { y: { min: 0, title: { display: true, text: 'Median EPSS Score' } } },
+    },
+  });
+
+  // Day-over-day % movement
+  const movDays = daily.filter(d => d.v4_pct_up != null);
+  if (movDays.length > 0) {
+    new Chart(document.getElementById('dailyMovementChart'), {
+      type: 'bar',
+      data: {
+        labels: movDays.map(d => d.date),
+        datasets: [
+          { label: 'V4 % Up', data: movDays.map(d => d.v4_pct_up), backgroundColor: V4_COLOR + 'bb' },
+          { label: 'V5 % Up', data: movDays.map(d => d.v5_pct_up), backgroundColor: V5_COLOR + 'bb' },
+          { label: 'V4 % Down', data: movDays.map(d => -(d.v4_pct_down || 0)), backgroundColor: V4_COLOR + '55' },
+          { label: 'V5 % Down', data: movDays.map(d => -(d.v5_pct_down || 0)), backgroundColor: V5_COLOR + '55' },
+        ],
+      },
+      options: { responsive: true, maintainAspectRatio: false, animation: false,
+        plugins: { legend: { position: 'top' }, title: { display: true, text: '% of CVEs Moving Up / Down vs Prior Day' } },
+        scales: {
+          x: { stacked: false },
+          y: { title: { display: true, text: '% of CVEs (negative = down)' } },
+        },
+      },
+    });
+  }
+}
+
+// ── Velocity quadrants ────────────────────────────────────────────────────────
+function renderQuadrants(quads, scatter) {
+  const quadDefs = [
+    { key: 'both_up',           label: 'Both Rising',         desc: 'V4 up + V5 up', color: '#0A7C6E' },
+    { key: 'v5_up_v4_flat_down',label: 'V5 Up / V4 Flat-Down', desc: 'V5 more reactive',  color: '#FF6B35' },
+    { key: 'v4_up_v5_flat_down',label: 'V4 Up / V5 Flat-Down', desc: 'V4 more reactive',  color: '#B45309' },
+    { key: 'both_down',         label: 'Both Falling',        desc: 'V4 down + V5 down', color: '#475569' },
+    { key: 'v5_down_v4_up',     label: 'Diverging: V5 Down, V4 Up', desc: 'Opposite directions', color: '#B91C1C' },
+    { key: 'v4_down_v5_up',     label: 'Diverging: V4 Down, V5 Up', desc: 'Opposite directions', color: '#7C3AED' },
+    { key: 'both_flat',         label: 'Both Stable',         desc: 'Minimal change in both', color: '#9CA3AF' },
+  ];
+  const total = Object.values(quads).reduce((a, b) => a + b, 0);
+
+  document.getElementById('quad-cards').innerHTML = quadDefs.map(q => {
+    const count = quads[q.key] || 0;
+    const pct = total ? (count / total * 100).toFixed(1) : '0';
+    return `<div class="col-6 col-md-4 col-xl-3">
+      <div class="quad-box">
+        <div class="quad-count" style="color:${q.color}">${count.toLocaleString()}</div>
+        <div style="font-size:0.78rem;font-weight:600;margin:2px 0;">${q.label}</div>
+        <div class="text-secondary" style="font-size:0.72rem;">${q.desc} · ${pct}%</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Scatter by severity
+  const bySev = {};
+  scatter.forEach(p => {
+    const s = p.sev || 'Unknown';
+    if (!bySev[s]) bySev[s] = [];
+    bySev[s].push({ x: p.x, y: p.y, cve: p.cve });
+  });
+
+  const datasets = Object.entries(bySev).map(([sev, pts]) => ({
+    label: sev,
+    data: pts,
+    backgroundColor: (SEV_COLORS[sev.toUpperCase()] || '#475569') + '88',
+    borderColor: 'transparent',
+    pointRadius: 2.5,
+  }));
+
+  // Quadrant reference lines
+  const maxSlope = 0.015;
+  datasets.push({ label: 'V4=V5 slope', data: [{x:-maxSlope,y:-maxSlope},{x:maxSlope,y:maxSlope}],
+    type:'line', borderColor:'#888', borderDash:[4,3], borderWidth:1, pointRadius:0, fill:false });
+  datasets.push({ label: 'Zero (V4)', data: [{x:0,y:-maxSlope},{x:0,y:maxSlope}],
+    type:'line', borderColor:'#ccc', borderWidth:1, pointRadius:0, fill:false });
+  datasets.push({ label: 'Zero (V5)', data: [{x:-maxSlope,y:0},{x:maxSlope,y:0}],
+    type:'line', borderColor:'#ccc', borderWidth:1, pointRadius:0, fill:false });
+
+  new Chart(document.getElementById('quadScatterChart'), {
+    type: 'scatter',
+    data: { datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: {
+        legend: { position: 'top', labels: { boxWidth: 10, filter: i => !['Zero (V4)','Zero (V5)','V4=V5 slope'].includes(i.text) } },
+        tooltip: { callbacks: { label: item => item.raw.cve ? ` ${item.raw.cve}  V4Δ: ${item.raw.x?.toFixed(5)}  V5Δ: ${item.raw.y?.toFixed(5)}` : null } },
+      },
+      scales: {
+        x: { title: { display: true, text: 'V4 Daily Slope (score/day)' } },
+        y: { title: { display: true, text: 'V5 Daily Slope (score/day)' } },
+      },
+    },
+  });
+}
+
+// ── Trend tables ──────────────────────────────────────────────────────────────
+function renderTrendTable(id, data, sortCol, sortDir) {
+  const tbody = document.getElementById(`${id}-tbody`);
+  tbody.innerHTML = data.map(d => `<tr>
+    <td><a class="cve-link" href="https://www.cve.org/CVERecord?id=${d.cve}" target="_blank">${d.cve}</a></td>
+    <td>${sevBadge(d.severity)}</td>
+    <td data-order="${d.v5_slope ?? 0}">${slopePill(d.v5_slope)}</td>
+    <td data-order="${d.v4_slope ?? 0}">${slopePill(d.v4_slope)}</td>
+    <td class="sparkline-cell">${sparkline(d.v5_scores, V5_COLOR)} <span style="font-size:0.7rem;color:var(--muted);">${(d.v5_scores||[]).map(v=>v?.toFixed(3)).join(' → ')}</span></td>
+    <td class="sparkline-cell">${sparkline(d.v4_scores, V4_COLOR)} <span style="font-size:0.7rem;color:var(--muted);">${(d.v4_scores||[]).map(v=>v?.toFixed(3)).join(' → ')}</span></td>
+    <td style="font-size:0.78rem;">${d.vendor || ''}</td>
+    <td style="font-size:0.75rem;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${(d.description||'').replace(/"/g,"'")}">${d.description || ''}</td>
+  </tr>`).join('');
+
+  $(`#${id}-table`).DataTable({
+    pageLength: 25,
+    order: [[sortCol === 'v5_slope' ? 2 : 3, sortDir]],
+    columnDefs: [{ orderable: false, targets: [4, 5, 7] }],
+    language: { search: 'Filter:' },
+  });
+}
+
+function renderDivergingTable(data) {
+  const tbody = document.getElementById('diverging-tbody');
+  tbody.innerHTML = data.map(d => `<tr>
+    <td><a class="cve-link" href="https://www.cve.org/CVERecord?id=${d.cve}" target="_blank">${d.cve}</a></td>
+    <td>${sevBadge(d.severity)}</td>
+    <td data-order="${d.v4_slope ?? 0}">${slopePill(d.v4_slope)}</td>
+    <td data-order="${d.v5_slope ?? 0}">${slopePill(d.v5_slope)}</td>
+    <td class="sparkline-cell">${sparkline(d.v4_scores, V4_COLOR)} <span style="font-size:0.7rem;color:var(--muted);">${(d.v4_scores||[]).map(v=>v?.toFixed(3)).join(' → ')}</span></td>
+    <td class="sparkline-cell">${sparkline(d.v5_scores, V5_COLOR)} <span style="font-size:0.7rem;color:var(--muted);">${(d.v5_scores||[]).map(v=>v?.toFixed(3)).join(' → ')}</span></td>
+    <td style="font-size:0.78rem;">${d.vendor || ''}</td>
+    <td style="font-size:0.75rem;max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="${(d.description||'').replace(/"/g,"'")}">${d.description || ''}</td>
+  </tr>`).join('');
+
+  $('#diverging-table').DataTable({
+    pageLength: 25,
+    order: [[2, 'desc']],
+    columnDefs: [{ orderable: false, targets: [4, 5, 7] }],
+    language: { search: 'Filter:' },
+  });
+}
+
+// ── Stability ─────────────────────────────────────────────────────────────────
+function renderStability(data) {
+  const buckets = ['stable', 'low', 'medium', 'high'];
+  const labels = { stable: 'Stable (<0.005)', low: 'Low (0.005-0.02)', medium: 'Medium (0.02-0.05)', high: 'High (>0.05)' };
+
+  document.getElementById('stability-stats').innerHTML = `
+    <div class="stat-card mb-3">
+      <div class="text-secondary mb-2" style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.06em;">Median Daily Volatility</div>
+      <div class="d-flex gap-4">
+        <div><div style="font-size:1.2rem;font-weight:700;color:${V4_COLOR};">${data.v4_median_vol ?? '—'}</div><div class="text-secondary" style="font-size:0.7rem;">V4</div></div>
+        <div><div style="font-size:1.2rem;font-weight:700;color:${V5_COLOR};">${data.v5_median_vol ?? '—'}</div><div class="text-secondary" style="font-size:0.7rem;">V5</div></div>
+      </div>
+      <div class="mt-3 text-secondary" style="font-size:0.75rem;">
+        ${(data.v5_median_vol > data.v4_median_vol)
+          ? 'V5 is more volatile day-to-day than V4.'
+          : 'V5 is more stable day-to-day than V4.'}
+      </div>
+    </div>`;
+
+  new Chart(document.getElementById('stabilityChart'), {
+    type: 'bar',
+    data: {
+      labels: buckets.map(b => labels[b]),
+      datasets: [
+        { label: 'V4', data: buckets.map(b => data.v4[b] || 0), backgroundColor: V4_COLOR + 'bb' },
+        { label: 'V5', data: buckets.map(b => data.v5[b] || 0), backgroundColor: V5_COLOR + 'bb' },
+      ],
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: false,
+      plugins: { legend: { position: 'top' }, title: { display: true, text: 'CVE Count by Score Volatility Bucket' } },
+      scales: { y: { title: { display: true, text: 'CVE Count' } } },
+    },
+  });
+}
+
+init().catch(err => {
+  document.body.innerHTML += `<div class="alert alert-danger m-4">Failed to load trend data: ${err.message}. Run <code>python build.py --trends --no-download</code> first.</div>`;
+});
+</script>
+</body>
+</html>

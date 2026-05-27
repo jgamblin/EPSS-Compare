@@ -1287,5 +1287,234 @@ def main():
     print("\nDone!", flush=True)
 
 
+def build_trends(dates: list[str], cache_dir: Path, no_download: bool, cve_data: pd.DataFrame) -> dict:
+    """
+    Load V4 and V5 scores for each date and compute trajectory statistics.
+    Returns a dict of JSON-serialisable objects for the trends page.
+    """
+    print(f"\n[Trends] Loading {len(dates)} date pairs...", flush=True)
+
+    panels = {}
+    for date in dates:
+        year = date.split("-")[0]
+        v4_url = EPSS_V4_URL.format(year=year, date=date)
+        v5_url = EPSS_V5_URL.format(date=date)
+        v4_cache = cache_dir / f"epss_v4_{date}.csv.gz"
+        v5_cache = cache_dir / f"epss_v5_{date}.csv.gz"
+        try:
+            v4 = download_epss(v4_url, v4_cache, no_download=no_download)
+            v5 = download_epss(v5_url, v5_cache, no_download=no_download)
+            merged = pd.merge(
+                v4.rename(columns={"epss": f"v4", "percentile": f"pct_v4"}),
+                v5.rename(columns={"epss": f"v5", "percentile": f"pct_v5"}),
+                on="cve", how="inner",
+            )
+            panels[date] = merged
+            print(f"  {date}: {len(merged):,} CVEs", flush=True)
+        except Exception as e:
+            print(f"  {date}: SKIPPED ({e})", flush=True)
+
+    if len(panels) < 2:
+        print("[Trends] Not enough dates — skipping.", flush=True)
+        return {}
+
+    dates_avail = sorted(panels.keys())
+
+    # ── Daily summary ─────────────────────────────────────────────────────────
+    daily_summary = []
+    prev = None
+    for d in dates_avail:
+        df = panels[d]
+        row = {
+            "date": d,
+            "v4_mean": r(df["v4"].mean()),
+            "v4_median": r(df["v4"].median()),
+            "v5_mean": r(df["v5"].mean()),
+            "v5_median": r(df["v5"].median()),
+            "count": len(df),
+        }
+        if prev is not None:
+            prev_df = panels[prev]
+            both = pd.merge(df[["cve","v4","v5"]], prev_df[["cve","v4","v5"]], on="cve", suffixes=("","_prev"))
+            both["dv4"] = both["v4"] - both["v4_prev"]
+            both["dv5"] = both["v5"] - both["v5_prev"]
+            row["v4_pct_up"] = round(float((both["dv4"] > 0.001).mean() * 100), 2)
+            row["v4_pct_down"] = round(float((both["dv4"] < -0.001).mean() * 100), 2)
+            row["v5_pct_up"] = round(float((both["dv5"] > 0.001).mean() * 100), 2)
+            row["v5_pct_down"] = round(float((both["dv5"] < -0.001).mean() * 100), 2)
+            row["v4_mean_change"] = r(both["dv4"].mean())
+            row["v5_mean_change"] = r(both["dv5"].mean())
+        prev = d
+        daily_summary.append(row)
+
+    # ── Panel: all dates merged on CVE ────────────────────────────────────────
+    # Build a wide frame: cve | v4_d1 | v5_d1 | v4_d2 | v5_d2 | ...
+    wide = None
+    for d in dates_avail:
+        safe = d.replace("-", "_")
+        df = panels[d][["cve","v4","v5"]].rename(columns={"v4": f"v4_{safe}", "v5": f"v5_{safe}"})
+        wide = df if wide is None else pd.merge(wide, df, on="cve", how="inner")
+
+    v4_cols = [f"v4_{d.replace('-','_')}" for d in dates_avail]
+    v5_cols = [f"v5_{d.replace('-','_')}" for d in dates_avail]
+    n = len(dates_avail)
+    xs = np.arange(n, dtype=float)
+
+    def slope(row_vals):
+        """Linear regression slope across n days."""
+        y = np.array(row_vals, dtype=float)
+        if np.any(np.isnan(y)):
+            return np.nan
+        return float(np.polyfit(xs, y, 1)[0])
+
+    print("[Trends] Computing per-CVE slopes (this takes ~30s)...", flush=True)
+    wide["v4_slope"] = wide[v4_cols].apply(slope, axis=1)
+    wide["v5_slope"] = wide[v5_cols].apply(slope, axis=1)
+    wide["v4_vol"] = wide[v4_cols].std(axis=1)
+    wide["v5_vol"] = wide[v5_cols].std(axis=1)
+    wide["v4_last"] = wide[v4_cols[-1]]
+    wide["v5_last"] = wide[v5_cols[-1]]
+    wide["v4_first"] = wide[v4_cols[0]]
+    wide["v5_first"] = wide[v5_cols[0]]
+
+    # Enrich with CVE metadata
+    if cve_data is not None and len(cve_data) > 0:
+        wide = pd.merge(wide, cve_data[["cve","vendor","product","cwe","cvss_severity","description"]], on="cve", how="left")
+        for col in ["vendor","product","cwe","cvss_severity","description"]:
+            wide[col] = wide[col].fillna("").astype(str).str.strip()
+    else:
+        for col in ["vendor","product","cwe","cvss_severity","description"]:
+            wide[col] = ""
+
+    def trend_record(row):
+        scores_v4 = [r(getattr(row, c)) for c in v4_cols]
+        scores_v5 = [r(getattr(row, c)) for c in v5_cols]
+        return {
+            "cve": row.cve,
+            "v4_slope": r(row.v4_slope),
+            "v5_slope": r(row.v5_slope),
+            "v4_vol": r(row.v4_vol),
+            "v5_vol": r(row.v5_vol),
+            "v4_scores": scores_v4,
+            "v5_scores": scores_v5,
+            "severity": row.cvss_severity or "",
+            "vendor": row.vendor or "",
+            "cwe": row.cwe or "",
+            "description": (row.description or "")[:200],
+        }
+
+    # ── Velocity quadrants ────────────────────────────────────────────────────
+    EPS = 0.0005
+    qq = wide.copy()
+    quad_counts = {
+        "both_up":   int(((qq["v5_slope"] > EPS) & (qq["v4_slope"] > EPS)).sum()),
+        "v5_up_v4_flat_down": int(((qq["v5_slope"] > EPS) & (qq["v4_slope"] <= EPS)).sum()),
+        "v4_up_v5_flat_down": int(((qq["v4_slope"] > EPS) & (qq["v5_slope"] <= EPS)).sum()),
+        "both_down": int(((qq["v5_slope"] < -EPS) & (qq["v4_slope"] < -EPS)).sum()),
+        "both_flat": int(((np.abs(qq["v5_slope"]) <= EPS) & (np.abs(qq["v4_slope"]) <= EPS)).sum()),
+        "v5_down_v4_up": int(((qq["v5_slope"] < -EPS) & (qq["v4_slope"] > EPS)).sum()),
+        "v4_down_v5_up": int(((qq["v4_slope"] < -EPS) & (qq["v5_slope"] > EPS)).sum()),
+    }
+
+    # Scatter sample for quadrant plot (up to 3000 pts with slope data)
+    quad_sample = wide[wide["v4_slope"].notna() & wide["v5_slope"].notna()].copy()
+    quad_sample = quad_sample.sample(min(3000, len(quad_sample)), random_state=42)
+    quad_scatter = [
+        {"x": r(row.v4_slope), "y": r(row.v5_slope), "cve": row.cve, "sev": row.cvss_severity}
+        for row in quad_sample.itertuples()
+    ]
+
+    # ── Top risers / fallers in V5 ────────────────────────────────────────────
+    TOP_N = 50
+    # Only CVEs with meaningful starting score (avoids noise from near-zero)
+    active = wide[wide["v4_first"] > 0.005].copy()
+
+    top_risers_v5 = active.nlargest(TOP_N, "v5_slope")
+    top_fallers_v5 = active.nsmallest(TOP_N, "v5_slope")
+
+    # ── Diverging: V4 up, V5 down (or vice versa) ────────────────────────────
+    diverging = wide[
+        ((wide["v4_slope"] > EPS) & (wide["v5_slope"] < -EPS)) |
+        ((wide["v4_slope"] < -EPS) & (wide["v5_slope"] > EPS))
+    ].copy()
+    diverging["abs_div"] = (diverging["v4_slope"] - diverging["v5_slope"]).abs()
+    diverging = diverging.nlargest(TOP_N, "abs_div")
+
+    # ── Stability comparison ──────────────────────────────────────────────────
+    # Buckets: low / medium / high volatility for each model
+    def vol_bucket(s):
+        if s < 0.005: return "stable"
+        if s < 0.02:  return "low"
+        if s < 0.05:  return "medium"
+        return "high"
+
+    wide["v4_vol_bucket"] = wide["v4_vol"].apply(vol_bucket)
+    wide["v5_vol_bucket"] = wide["v5_vol"].apply(vol_bucket)
+    stability = {
+        "v4": wide["v4_vol_bucket"].value_counts().to_dict(),
+        "v5": wide["v5_vol_bucket"].value_counts().to_dict(),
+        "v4_median_vol": r(wide["v4_vol"].median()),
+        "v5_median_vol": r(wide["v5_vol"].median()),
+    }
+
+    return {
+        "dates": dates_avail,
+        "daily_summary": daily_summary,
+        "velocity_quadrants": quad_counts,
+        "quad_scatter": quad_scatter,
+        "top_risers_v5": [trend_record(row) for row in top_risers_v5.itertuples()],
+        "top_fallers_v5": [trend_record(row) for row in top_fallers_v5.itertuples()],
+        "diverging": [trend_record(row) for row in diverging.itertuples()],
+        "stability": stability,
+    }
+
+
+def trends_main():
+    """Entry point for the trends pipeline: python build.py --trends"""
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--dates", nargs="+",
+                    default=["2026-05-22","2026-05-23","2026-05-24","2026-05-25","2026-05-26"])
+    ap.add_argument("--cve-dir", default=os.path.expanduser("~/Data/cvelistV5"))
+    ap.add_argument("--out-dir", default="docs/data/trends")
+    ap.add_argument("--cache-dir", default=".cache")
+    ap.add_argument("--no-download", action="store_true")
+    args = ap.parse_args()
+
+    cache_dir = Path(args.cache_dir)
+    out_dir = Path(args.out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cache_dir.mkdir(parents=True, exist_ok=True)
+
+    print("=== EPSS Trends Pipeline ===", flush=True)
+    print(f"Dates: {args.dates}", flush=True)
+
+    print("\nLoading CVE enrichment data...", flush=True)
+    cve_data = load_cve_data(Path(args.cve_dir) / "cves")
+
+    data = build_trends(args.dates, cache_dir, args.no_download, cve_data)
+    if not data:
+        sys.exit(1)
+
+    write_json(out_dir / "daily_summary.json", data["daily_summary"])
+    write_json(out_dir / "velocity_quadrants.json", data["velocity_quadrants"])
+    write_json(out_dir / "quad_scatter.json", data["quad_scatter"])
+    write_json(out_dir / "top_risers_v5.json", data["top_risers_v5"])
+    write_json(out_dir / "top_fallers_v5.json", data["top_fallers_v5"])
+    write_json(out_dir / "diverging.json", data["diverging"])
+    write_json(out_dir / "stability.json", data["stability"])
+    write_json(out_dir / "meta.json", {
+        "built_at": datetime.now(timezone.utc).isoformat(),
+        "dates": data["dates"],
+        "total_cves": data["daily_summary"][-1]["count"] if data["daily_summary"] else 0,
+    })
+    print(f"\nWrote {len(data)} datasets to {out_dir}/", flush=True)
+    print("\nDone!", flush=True)
+
+
 if __name__ == "__main__":
-    main()
+    import sys
+    if "--trends" in sys.argv:
+        sys.argv.remove("--trends")
+        trends_main()
+    else:
+        main()
