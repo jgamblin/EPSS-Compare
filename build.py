@@ -1404,13 +1404,14 @@ def build_trends(dates: list[str], cache_dir: Path, no_download: bool, cve_data:
         }
 
     # ── Velocity quadrants ────────────────────────────────────────────────────
-    EPS = 0.0005
+    # EPS calibrated to ~2x the minimum observed meaningful daily change (~0.001)
+    EPS = 0.002
     # Exclude CVEs with NaN slopes (insufficient data across the window)
     nan_mask = wide["v4_slope"].isna() | wide["v5_slope"].isna()
     nan_count = int(nan_mask.sum())
     qq = wide[~nan_mask].copy()
 
-    # Mutually-exclusive direction flags
+    # Mutually-exclusive direction flags — all 9 cells of the 3x3 matrix covered
     v5_up   = qq["v5_slope"] > EPS
     v5_down = qq["v5_slope"] < -EPS
     v5_flat = np.abs(qq["v5_slope"]) <= EPS
@@ -1419,14 +1420,16 @@ def build_trends(dates: list[str], cache_dir: Path, no_download: bool, cve_data:
     v4_flat = np.abs(qq["v4_slope"]) <= EPS
 
     quad_counts = {
-        "both_up":            int((v5_up & v4_up).sum()),
-        "v5_up_v4_flat_down": int((v5_up & v4_flat).sum()),   # V5 rising, V4 truly stable
-        "v4_up_v5_flat_down": int((v4_up & v5_flat).sum()),   # V4 rising, V5 truly stable
-        "both_down":          int((v5_down & v4_down).sum()),
-        "both_flat":          int((v5_flat & v4_flat).sum()),
-        "v5_down_v4_up":      int((v5_down & v4_up).sum()),   # Diverging: V5 falling, V4 rising
-        "v4_down_v5_up":      int((v4_down & v5_up).sum()),   # Diverging: V4 falling, V5 rising
-        "nan_excluded":       nan_count,                       # CVEs lacking a full data series
+        "both_up":           int((v5_up   & v4_up).sum()),    # Both rising
+        "v5_up_v4_stable":   int((v5_up   & v4_flat).sum()),  # V5 rising, V4 flat
+        "v4_up_v5_stable":   int((v4_up   & v5_flat).sum()),  # V4 rising, V5 flat
+        "both_down":         int((v5_down & v4_down).sum()),  # Both falling
+        "both_stable":       int((v5_flat & v4_flat).sum()),  # Both flat
+        "v5_down_v4_up":     int((v5_down & v4_up).sum()),    # Diverging: V5 down, V4 up
+        "v4_down_v5_up":     int((v4_down & v5_up).sum()),    # Diverging: V4 down, V5 up
+        "v5_down_v4_stable": int((v5_down & v4_flat).sum()),  # V5 falling, V4 flat
+        "v4_down_v5_stable": int((v4_down & v5_flat).sum()),  # V4 falling, V5 flat
+        "nan_excluded":      nan_count,
     }
 
     # Scatter sample for quadrant plot (up to 3000 pts with slope data)
@@ -1473,6 +1476,11 @@ def build_trends(dates: list[str], cache_dir: Path, no_download: bool, cve_data:
         "v5_nan_vol":    int(wide["v5_vol"].isna().sum()),
     }
 
+    def diverging_record(row):
+        rec = trend_record(row)
+        rec["abs_div"] = r(row.abs_div)
+        return rec
+
     return {
         "dates": dates_avail,
         "daily_summary": daily_summary,
@@ -1480,8 +1488,10 @@ def build_trends(dates: list[str], cache_dir: Path, no_download: bool, cve_data:
         "quad_scatter": quad_scatter,
         "top_risers_v5": [trend_record(row) for row in top_risers_v5.itertuples()],
         "top_fallers_v5": [trend_record(row) for row in top_fallers_v5.itertuples()],
-        "diverging": [trend_record(row) for row in diverging.itertuples()],
+        "diverging": [diverging_record(row) for row in diverging.itertuples()],
         "stability": stability,
+        "wide_cve_count": len(wide),
+        "active_cve_count": len(active),
     }
 
 
@@ -1521,7 +1531,9 @@ def trends_main():
     write_json(out_dir / "meta.json", {
         "built_at": datetime.now(timezone.utc).isoformat(),
         "dates": data["dates"],
-        "total_cves": data["daily_summary"][-1]["count"] if data["daily_summary"] else 0,
+        "total_cves": data["wide_cve_count"],           # CVEs present across all dates (inner join)
+        "total_cves_last_day": data["daily_summary"][-1]["count"] if data["daily_summary"] else 0,
+        "active_cve_count": data["active_cve_count"],   # CVEs passing v4_first > 0.005 filter
     })
     print(f"\nWrote {len(data)} datasets to {out_dir}/", flush=True)
     print("\nDone!", flush=True)

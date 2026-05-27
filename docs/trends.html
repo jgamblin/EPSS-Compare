@@ -136,7 +136,7 @@
   <div id="risers-section" class="section-anchor card mb-4">
     <div class="card-header">Top 50 Risers in V5 Beta</div>
     <div class="card-body">
-      <div class="section-sub">CVEs with the steepest upward V5 slope over the window, scored against their V4 trajectory. These are CVEs V5 is increasingly prioritizing that V4 may be missing.</div>
+      <div class="section-sub">CVEs showing the steepest upward slope in V5 over the window, with flat or declining V4 slopes. A rising V5 slope means V5 assigns a higher score on later days than earlier days — it does not confirm a sustained trend or that V4 is wrong. One large score jump on a single day produces the same slope as a gradual rise across all five days.</div>
       <div class="table-responsive">
         <table id="risers-table" class="table table-sm table-light w-100">
           <thead><tr>
@@ -155,7 +155,7 @@
   <div id="fallers-section" class="section-anchor card mb-4">
     <div class="card-header">Top 50 Fallers in V5 Beta</div>
     <div class="card-body">
-      <div class="section-sub">CVEs with the steepest downward V5 slope, scored against their V4 trajectory. These are CVEs V5 is de-prioritizing that V4 keeps stable or elevated.</div>
+      <div class="section-sub">CVEs showing the steepest downward slope in V5 over the window, where V4 remains stable or elevated. A falling V5 slope means V5 assigns a lower score on later days than earlier days — it does not confirm a sustained decline or that V4 is wrong.</div>
       <div class="table-responsive">
         <table id="fallers-table" class="table table-sm table-light w-100">
           <thead><tr>
@@ -174,7 +174,7 @@
   <div id="diverging-section" class="section-anchor card mb-4">
     <div class="card-header">Diverging CVEs: V4 and V5 Moving in Opposite Directions</div>
     <div class="card-body">
-      <div class="section-sub">CVEs where V4 is trending up while V5 trends down, or vice versa. These are the most analytically significant cases for understanding model differences.</div>
+      <div class="section-sub">CVEs where V4 and V5 slopes point in opposite directions. These are the most interesting cases, but treat them with caution: a one-day score jump in either model against a static baseline in the other produces the same signature as genuine sustained divergence. Sorted by absolute slope difference.</div>
       <div class="table-responsive">
         <table id="diverging-table" class="table table-sm table-light w-100">
           <thead><tr>
@@ -383,7 +383,7 @@ function renderDaily(daily) {
       options: { responsive: true, maintainAspectRatio: false, animation: false,
         plugins: {
           legend: { position: 'top' },
-          title: { display: true, text: '% of CVEs With Score Change vs Prior Day (Rising / Falling, all positive values)' },
+          title: { display: true, text: '% of CVEs With Score Change vs Prior Day (solid = rising, outline = falling)' },
         },
         scales: {
           x: { stacked: false },
@@ -397,15 +397,17 @@ function renderDaily(daily) {
 // ── Velocity quadrants ────────────────────────────────────────────────────────
 function renderQuadrants(quads, scatter) {
   const quadDefs = [
-    { key: 'both_up',           label: 'Both Rising',              desc: 'V4 up + V5 up',           color: '#0A7C6E' },
-    { key: 'v5_up_v4_flat_down',label: 'V5 Up / V4 Stable',        desc: 'V5 more reactive',         color: '#FF6B35' },
-    { key: 'v4_up_v5_flat_down',label: 'V4 Up / V5 Stable',        desc: 'V4 more reactive',         color: '#B45309' },
-    { key: 'both_down',         label: 'Both Falling',             desc: 'V4 down + V5 down',        color: '#475569' },
-    { key: 'v5_down_v4_up',     label: 'Diverging: V5↓ V4↑',      desc: 'Opposite directions',      color: '#B91C1C' },
-    { key: 'v4_down_v5_up',     label: 'Diverging: V4↓ V5↑',      desc: 'Opposite directions',      color: '#7C3AED' },
-    { key: 'both_flat',         label: 'Both Stable',              desc: 'Minimal change in both',   color: '#9CA3AF' },
+    { key: 'both_up',           label: 'Both Rising',         desc: 'V4 up + V5 up',         color: '#0A7C6E' },
+    { key: 'v5_up_v4_stable',   label: 'V5 Up / V4 Stable',  desc: 'V5 rising, V4 flat',     color: '#FF6B35' },
+    { key: 'v4_up_v5_stable',   label: 'V4 Up / V5 Stable',  desc: 'V4 rising, V5 flat',     color: '#B45309' },
+    { key: 'both_down',         label: 'Both Falling',        desc: 'V4 down + V5 down',      color: '#475569' },
+    { key: 'v5_down_v4_stable', label: 'V5 Down / V4 Stable',desc: 'V5 falling, V4 flat',    color: '#6366F1' },
+    { key: 'v4_down_v5_stable', label: 'V4 Down / V5 Stable',desc: 'V4 falling, V5 flat',    color: '#EC4899' },
+    { key: 'v5_down_v4_up',     label: 'Diverging: V5↓ V4↑', desc: 'Opposite directions',    color: '#B91C1C' },
+    { key: 'v4_down_v5_up',     label: 'Diverging: V4↓ V5↑', desc: 'Opposite directions',    color: '#7C3AED' },
+    { key: 'both_stable',       label: 'Both Stable',         desc: 'Minimal change in both', color: '#9CA3AF' },
   ];
-  // Exclude the metadata field from totals
+  // Exclude metadata fields from totals
   const nanExcluded = quads.nan_excluded || 0;
   const countableQuads = {...quads};
   delete countableQuads.nan_excluded;
@@ -415,6 +417,16 @@ function renderQuadrants(quads, scatter) {
   const nanNote = document.getElementById('quad-nan-note');
   if (nanExcluded > 0 && nanNote) {
     nanNote.textContent = `${nanExcluded.toLocaleString()} CVEs lacked a complete score series and are excluded from quadrant counts.`;
+  }
+
+  // Asymmetry callout: compare single-model reactive counts
+  const v5only = quads.v5_up_v4_stable || 0;
+  const v4only = quads.v4_up_v5_stable || 0;
+  if ((v4only > 0 || v5only > 0) && nanNote) {
+    const ratio = v4only > v5only
+      ? `V4 is ${(v4only / Math.max(v5only, 1)).toFixed(1)}x more reactive than V5 in this window (${v4only.toLocaleString()} vs ${v5only.toLocaleString()} CVEs moving in only one model).`
+      : `V5 is ${(v5only / Math.max(v4only, 1)).toFixed(1)}x more reactive than V4 in this window (${v5only.toLocaleString()} vs ${v4only.toLocaleString()} CVEs moving in only one model).`;
+    nanNote.textContent = (nanExcluded > 0 ? `${nanExcluded.toLocaleString()} CVEs excluded (incomplete series). ` : '') + ratio;
   }
 
   document.getElementById('quad-cards').innerHTML = quadDefs.map(q => {
@@ -498,10 +510,11 @@ function renderTrendTable(id, data, sortCol, sortDir) {
 
 function renderDivergingTable(data) {
   const tbody = document.getElementById('diverging-tbody');
+  // Sort column 2 (V4 Slope) by abs_div so default sort = most divergent first
   tbody.innerHTML = data.map(d => `<tr>
     <td><a class="cve-link" href="https://www.cve.org/CVERecord?id=${d.cve}" target="_blank">${d.cve}</a></td>
     <td>${sevBadge(d.severity)}</td>
-    <td data-order="${d.v4_slope ?? 0}">${slopePill(d.v4_slope)}</td>
+    <td data-order="${d.abs_div ?? 0}">${slopePill(d.v4_slope)}</td>
     <td data-order="${d.v5_slope ?? 0}">${slopePill(d.v5_slope)}</td>
     <td class="sparkline-cell">${sparkline(d.v4_scores, V4_COLOR)} <span style="font-size:0.7rem;color:var(--muted);">${(d.v4_scores||[]).map(v=>v?.toFixed(3)).join(' → ')}</span></td>
     <td class="sparkline-cell">${sparkline(d.v5_scores, V5_COLOR)} <span style="font-size:0.7rem;color:var(--muted);">${(d.v5_scores||[]).map(v=>v?.toFixed(3)).join(' → ')}</span></td>
@@ -511,7 +524,7 @@ function renderDivergingTable(data) {
 
   $('#diverging-table').DataTable({
     pageLength: 25,
-    order: [[2, 'desc']],
+    order: [[2, 'desc']],  // sorts by abs_div (data-order on V4 Slope column)
     columnDefs: [
       { orderable: false, targets: [4, 5, 7] },
       { type: 'num', targets: [2, 3] },
@@ -533,9 +546,11 @@ function renderStability(data) {
         <div><div style="font-size:1.2rem;font-weight:700;color:${V5_COLOR};">${data.v5_median_vol ?? 'n/a'}</div><div class="text-secondary" style="font-size:0.7rem;">V5</div></div>
       </div>
       <div class="mt-3 text-secondary" style="font-size:0.75rem;">
-        ${(data.v5_median_vol > data.v4_median_vol)
-          ? 'V5 is more volatile day-to-day than V4.'
-          : 'V5 is more stable day-to-day than V4.'}
+        ${(data.v5_median_vol != null && data.v4_median_vol != null)
+          ? (data.v5_median_vol > data.v4_median_vol
+              ? 'V5 is more volatile day-to-day than V4.'
+              : 'V5 is more stable day-to-day than V4.')
+          : 'Volatility comparison unavailable.'}
       </div>
     </div>`;
 
