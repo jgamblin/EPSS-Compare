@@ -83,14 +83,9 @@
     <div class="text-secondary" style="font-size:0.82rem;" id="date-range-sub">Loading...</div>
   </div>
 
-  <!-- Data quality caveat -->
+  <!-- Data quality caveat (text populated by JS after data loads) -->
   <div class="alert alert-warning alert-dismissible fade show py-2 mb-3" role="alert" id="caveat-banner" style="font-size:0.82rem;">
-    <strong>Provisional data. Read before sharing.</strong>
-    V5 Beta publishes scores only on select days. <span id="caveat-v5-zero"></span>confirmed 0% V5 movement,
-    meaning slope classifications for V5 are derived from fewer effective data points than V4.
-    All velocity quadrant and trend findings should be treated as exploratory until V5 publishes daily.
-    Slope is computed over a <span id="caveat-window">5</span>-day window. A single one-time jump on day 1 or 5
-    produces the same slope as a sustained trend. Treat CVEs in the Risers/Fallers tables accordingly.
+    <span id="caveat-text">Loading data quality notes...</span>
     <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Close"></button>
   </div>
 
@@ -279,17 +274,19 @@ async function init() {
   if (meta.dates && meta.dates.length) {
     document.getElementById('date-range-sub').textContent =
       `${meta.dates[0]} to ${meta.dates[meta.dates.length-1]} · ${meta.dates.length} days · ${(meta.total_cves||0).toLocaleString()} CVEs`;
-    document.getElementById('caveat-window').textContent = meta.dates.length;
   }
 
-  // Populate V5 zero-movement dates in caveat banner
+  // Build caveat banner text from actual data
   const v5ZeroDays = daily.filter(d => d.v5_pct_up === 0 && d.v5_pct_down === 0 && d.v4_pct_up != null);
+  const windowDays = meta.dates ? meta.dates.length : 5;
+  let caveatHtml = '<strong>Provisional data. Read before sharing.</strong> ';
   if (v5ZeroDays.length > 0) {
-    document.getElementById('caveat-v5-zero').textContent =
-      v5ZeroDays.map(d => d.date).join(', ') + ' showed';
-  } else {
-    document.getElementById('caveat-v5-zero').textContent = 'no dates showed';
+    const zeroDates = v5ZeroDays.map(d => d.date).join(', ');
+    caveatHtml += `V5 Beta scores were unchanged on ${zeroDates} — no CVE changed score on those days, which means V5 likely did not publish new scores. `;
+    caveatHtml += `V5 velocity calculations are effectively based on ${windowDays - v5ZeroDays.length} publishing days, not ${windowDays}. `;
   }
+  caveatHtml += `Slope is a linear regression over the ${windowDays}-day window. A single score jump on any one day looks the same as a sustained trend. All quadrant and velocity findings should be treated as exploratory.`;
+  document.getElementById('caveat-text').innerHTML = caveatHtml;
 
   renderDaily(daily);
   renderQuadrants(quads, quadScatter);
