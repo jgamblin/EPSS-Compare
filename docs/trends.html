@@ -83,6 +83,17 @@
     <div class="text-secondary" style="font-size:0.82rem;" id="date-range-sub">Loading...</div>
   </div>
 
+  <!-- Data quality caveat -->
+  <div class="alert alert-warning alert-dismissible fade show py-2 mb-3" role="alert" id="caveat-banner" style="font-size:0.82rem;">
+    <strong>Provisional data — read before sharing:</strong>
+    V5 Beta publishes scores only on select days; <span id="caveat-v5-zero"></span>confirmed 0% V5 movement,
+    meaning slope classifications for V5 are derived from fewer effective data points than V4.
+    All velocity quadrant and trend findings should be treated as exploratory until V5 publishes daily.
+    Slope is computed over a <span id="caveat-window">5</span>-day window — a single one-time jump on day 1 or 5
+    produces the same slope as a sustained trend; treat CVEs in the Risers/Fallers tables accordingly.
+    <button type="button" class="btn-close btn-sm" data-bs-dismiss="alert" aria-label="Close"></button>
+  </div>
+
   <!-- Nav -->
   <ul class="nav nav-pills flex-wrap gap-1 mb-4">
     <li class="nav-item"><a class="nav-link active" href="#daily-section">Daily Averages</a></li>
@@ -119,9 +130,9 @@
   <div id="quadrant-section" class="section-anchor card mb-4">
     <div class="card-header">Velocity Quadrants — Which direction are scores trending?</div>
     <div class="card-body">
-      <div class="section-sub">Each CVE is classified by the slope of its V4 and V5 scores over the window. CVEs in opposite quadrants are moving in different directions between models.</div>
+      <div class="section-sub">Each CVE is classified by the linear slope of its scores over the analysis window. "Both Stable" dominates because EPSS is slow-moving — only a small fraction of CVEs change meaningfully over 5 days. <span id="quad-nan-note"></span></div>
       <div class="row g-3 mb-4" id="quad-cards"></div>
-      <div class="section-sub mt-2">Slope scatter — each point is a CVE. Points in the upper-left (V5 rising, V4 flat/falling) or lower-right (V4 rising, V5 falling) show model divergence.</div>
+      <div class="section-sub mt-2">Slope scatter — each point is one CVE. Upper-left (V5 rising, V4 flat) and lower-right (V4 rising, V5 flat) show the most analytically interesting divergences. Note: slope is linear regression over the window — a single jump on day 1 or 5 produces the same slope as a sustained rise.</div>
       <div class="chart-wrap" style="height:380px;"><canvas id="quadScatterChart"></canvas></div>
     </div>
   </div>
@@ -268,6 +279,16 @@ async function init() {
   if (meta.dates && meta.dates.length) {
     document.getElementById('date-range-sub').textContent =
       `${meta.dates[0]} to ${meta.dates[meta.dates.length-1]} · ${meta.dates.length} days · ${(meta.total_cves||0).toLocaleString()} CVEs`;
+    document.getElementById('caveat-window').textContent = meta.dates.length;
+  }
+
+  // Populate V5 zero-movement dates in caveat banner
+  const v5ZeroDays = daily.filter(d => d.v5_pct_up === 0 && d.v5_pct_down === 0 && d.v4_pct_up != null);
+  if (v5ZeroDays.length > 0) {
+    document.getElementById('caveat-v5-zero').textContent =
+      v5ZeroDays.map(d => d.date).join(', ') + ' showed';
+  } else {
+    document.getElementById('caveat-v5-zero').textContent = 'no dates showed';
   }
 
   renderDaily(daily);
@@ -347,7 +368,7 @@ function renderDaily(daily) {
     },
   });
 
-  // Day-over-day % movement
+  // Day-over-day % movement — two side-by-side grouped charts (up and down separately, all positive)
   const movDays = daily.filter(d => d.v4_pct_up != null);
   if (movDays.length > 0) {
     new Chart(document.getElementById('dailyMovementChart'), {
@@ -355,17 +376,20 @@ function renderDaily(daily) {
       data: {
         labels: movDays.map(d => d.date),
         datasets: [
-          { label: 'V4 % Up', data: movDays.map(d => d.v4_pct_up), backgroundColor: V4_COLOR + 'bb' },
-          { label: 'V5 % Up', data: movDays.map(d => d.v5_pct_up), backgroundColor: V5_COLOR + 'bb' },
-          { label: 'V4 % Down', data: movDays.map(d => -(d.v4_pct_down || 0)), backgroundColor: V4_COLOR + '55' },
-          { label: 'V5 % Down', data: movDays.map(d => -(d.v5_pct_down || 0)), backgroundColor: V5_COLOR + '55' },
+          { label: 'V4 % Rising',  data: movDays.map(d => d.v4_pct_up),         backgroundColor: V4_COLOR + 'cc' },
+          { label: 'V5 % Rising',  data: movDays.map(d => d.v5_pct_up),         backgroundColor: V5_COLOR + 'cc' },
+          { label: 'V4 % Falling', data: movDays.map(d => d.v4_pct_down || 0),  backgroundColor: V4_COLOR + '44', borderColor: V4_COLOR, borderWidth: 1 },
+          { label: 'V5 % Falling', data: movDays.map(d => d.v5_pct_down || 0),  backgroundColor: V5_COLOR + '44', borderColor: V5_COLOR, borderWidth: 1 },
         ],
       },
       options: { responsive: true, maintainAspectRatio: false, animation: false,
-        plugins: { legend: { position: 'top' }, title: { display: true, text: '% of CVEs Moving Up / Down vs Prior Day' } },
+        plugins: {
+          legend: { position: 'top' },
+          title: { display: true, text: '% of CVEs With Score Change vs Prior Day (Rising / Falling, all positive values)' },
+        },
         scales: {
           x: { stacked: false },
-          y: { title: { display: true, text: '% of CVEs (negative = down)' } },
+          y: { min: 0, title: { display: true, text: '% of CVEs' } },
         },
       },
     });
@@ -375,15 +399,25 @@ function renderDaily(daily) {
 // ── Velocity quadrants ────────────────────────────────────────────────────────
 function renderQuadrants(quads, scatter) {
   const quadDefs = [
-    { key: 'both_up',           label: 'Both Rising',         desc: 'V4 up + V5 up', color: '#0A7C6E' },
-    { key: 'v5_up_v4_flat_down',label: 'V5 Up / V4 Flat-Down', desc: 'V5 more reactive',  color: '#FF6B35' },
-    { key: 'v4_up_v5_flat_down',label: 'V4 Up / V5 Flat-Down', desc: 'V4 more reactive',  color: '#B45309' },
-    { key: 'both_down',         label: 'Both Falling',        desc: 'V4 down + V5 down', color: '#475569' },
-    { key: 'v5_down_v4_up',     label: 'Diverging: V5 Down, V4 Up', desc: 'Opposite directions', color: '#B91C1C' },
-    { key: 'v4_down_v5_up',     label: 'Diverging: V4 Down, V5 Up', desc: 'Opposite directions', color: '#7C3AED' },
-    { key: 'both_flat',         label: 'Both Stable',         desc: 'Minimal change in both', color: '#9CA3AF' },
+    { key: 'both_up',           label: 'Both Rising',              desc: 'V4 up + V5 up',           color: '#0A7C6E' },
+    { key: 'v5_up_v4_flat_down',label: 'V5 Up / V4 Stable',        desc: 'V5 more reactive',         color: '#FF6B35' },
+    { key: 'v4_up_v5_flat_down',label: 'V4 Up / V5 Stable',        desc: 'V4 more reactive',         color: '#B45309' },
+    { key: 'both_down',         label: 'Both Falling',             desc: 'V4 down + V5 down',        color: '#475569' },
+    { key: 'v5_down_v4_up',     label: 'Diverging: V5↓ V4↑',      desc: 'Opposite directions',      color: '#B91C1C' },
+    { key: 'v4_down_v5_up',     label: 'Diverging: V4↓ V5↑',      desc: 'Opposite directions',      color: '#7C3AED' },
+    { key: 'both_flat',         label: 'Both Stable',              desc: 'Minimal change in both',   color: '#9CA3AF' },
   ];
-  const total = Object.values(quads).reduce((a, b) => a + b, 0);
+  // Exclude the metadata field from totals
+  const nanExcluded = quads.nan_excluded || 0;
+  const countableQuads = {...quads};
+  delete countableQuads.nan_excluded;
+  const total = Object.values(countableQuads).reduce((a, b) => a + b, 0);
+
+  // Show NaN note if any CVEs were excluded
+  const nanNote = document.getElementById('quad-nan-note');
+  if (nanExcluded > 0 && nanNote) {
+    nanNote.textContent = `${nanExcluded.toLocaleString()} CVEs lacked a complete score series and are excluded from quadrant counts.`;
+  }
 
   document.getElementById('quad-cards').innerHTML = quadDefs.map(q => {
     const count = quads[q.key] || 0;
@@ -456,7 +490,10 @@ function renderTrendTable(id, data, sortCol, sortDir) {
   $(`#${id}-table`).DataTable({
     pageLength: 25,
     order: [[sortCol === 'v5_slope' ? 2 : 3, sortDir]],
-    columnDefs: [{ orderable: false, targets: [4, 5, 7] }],
+    columnDefs: [
+      { orderable: false, targets: [4, 5, 7] },
+      { type: 'num', targets: [2, 3] },
+    ],
     language: { search: 'Filter:' },
   });
 }
@@ -477,7 +514,10 @@ function renderDivergingTable(data) {
   $('#diverging-table').DataTable({
     pageLength: 25,
     order: [[2, 'desc']],
-    columnDefs: [{ orderable: false, targets: [4, 5, 7] }],
+    columnDefs: [
+      { orderable: false, targets: [4, 5, 7] },
+      { type: 'num', targets: [2, 3] },
+    ],
     language: { search: 'Filter:' },
   });
 }
@@ -519,7 +559,10 @@ function renderStability(data) {
 }
 
 init().catch(err => {
-  document.body.innerHTML += `<div class="alert alert-danger m-4">Failed to load trend data: ${err.message}. Run <code>python build.py --trends --no-download</code> first.</div>`;
+  const errDiv = document.createElement('div');
+  errDiv.className = 'alert alert-danger m-4';
+  errDiv.innerHTML = `<strong>Failed to load trend data:</strong> ${err.message}. Run <code>python build.py --trends --no-download</code> first.`;
+  document.querySelector('.container-fluid').prepend(errDiv);
 });
 </script>
 </body>

@@ -1405,15 +1405,28 @@ def build_trends(dates: list[str], cache_dir: Path, no_download: bool, cve_data:
 
     # ── Velocity quadrants ────────────────────────────────────────────────────
     EPS = 0.0005
-    qq = wide.copy()
+    # Exclude CVEs with NaN slopes (insufficient data across the window)
+    nan_mask = wide["v4_slope"].isna() | wide["v5_slope"].isna()
+    nan_count = int(nan_mask.sum())
+    qq = wide[~nan_mask].copy()
+
+    # Mutually-exclusive direction flags
+    v5_up   = qq["v5_slope"] > EPS
+    v5_down = qq["v5_slope"] < -EPS
+    v5_flat = np.abs(qq["v5_slope"]) <= EPS
+    v4_up   = qq["v4_slope"] > EPS
+    v4_down = qq["v4_slope"] < -EPS
+    v4_flat = np.abs(qq["v4_slope"]) <= EPS
+
     quad_counts = {
-        "both_up":   int(((qq["v5_slope"] > EPS) & (qq["v4_slope"] > EPS)).sum()),
-        "v5_up_v4_flat_down": int(((qq["v5_slope"] > EPS) & (qq["v4_slope"] <= EPS)).sum()),
-        "v4_up_v5_flat_down": int(((qq["v4_slope"] > EPS) & (qq["v5_slope"] <= EPS)).sum()),
-        "both_down": int(((qq["v5_slope"] < -EPS) & (qq["v4_slope"] < -EPS)).sum()),
-        "both_flat": int(((np.abs(qq["v5_slope"]) <= EPS) & (np.abs(qq["v4_slope"]) <= EPS)).sum()),
-        "v5_down_v4_up": int(((qq["v5_slope"] < -EPS) & (qq["v4_slope"] > EPS)).sum()),
-        "v4_down_v5_up": int(((qq["v4_slope"] < -EPS) & (qq["v5_slope"] > EPS)).sum()),
+        "both_up":            int((v5_up & v4_up).sum()),
+        "v5_up_v4_flat_down": int((v5_up & v4_flat).sum()),   # V5 rising, V4 truly stable
+        "v4_up_v5_flat_down": int((v4_up & v5_flat).sum()),   # V4 rising, V5 truly stable
+        "both_down":          int((v5_down & v4_down).sum()),
+        "both_flat":          int((v5_flat & v4_flat).sum()),
+        "v5_down_v4_up":      int((v5_down & v4_up).sum()),   # Diverging: V5 falling, V4 rising
+        "v4_down_v5_up":      int((v4_down & v5_up).sum()),   # Diverging: V4 falling, V5 rising
+        "nan_excluded":       nan_count,                       # CVEs lacking a full data series
     }
 
     # Scatter sample for quadrant plot (up to 3000 pts with slope data)
@@ -1443,6 +1456,7 @@ def build_trends(dates: list[str], cache_dir: Path, no_download: bool, cve_data:
     # ── Stability comparison ──────────────────────────────────────────────────
     # Buckets: low / medium / high volatility for each model
     def vol_bucket(s):
+        if pd.isna(s): return None  # excluded from counts
         if s < 0.005: return "stable"
         if s < 0.02:  return "low"
         if s < 0.05:  return "medium"
@@ -1451,10 +1465,12 @@ def build_trends(dates: list[str], cache_dir: Path, no_download: bool, cve_data:
     wide["v4_vol_bucket"] = wide["v4_vol"].apply(vol_bucket)
     wide["v5_vol_bucket"] = wide["v5_vol"].apply(vol_bucket)
     stability = {
-        "v4": wide["v4_vol_bucket"].value_counts().to_dict(),
-        "v5": wide["v5_vol_bucket"].value_counts().to_dict(),
+        "v4": wide["v4_vol_bucket"].dropna().value_counts().to_dict(),
+        "v5": wide["v5_vol_bucket"].dropna().value_counts().to_dict(),
         "v4_median_vol": r(wide["v4_vol"].median()),
         "v5_median_vol": r(wide["v5_vol"].median()),
+        "v4_nan_vol":    int(wide["v4_vol"].isna().sum()),
+        "v5_nan_vol":    int(wide["v5_vol"].isna().sum()),
     }
 
     return {
