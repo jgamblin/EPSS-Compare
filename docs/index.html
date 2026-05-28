@@ -127,7 +127,7 @@
     <div class="card-header d-flex justify-content-between align-items-center">
       Score Distribution
       <div>
-        <button class="btn btn-sm btn-outline-secondary me-1" id="dist-log-btn" onclick="toggleDistLog()">Log Scale</button>
+        <button class="btn btn-sm btn-primary me-1" id="dist-log-btn" onclick="toggleDistLog()">Log Scale</button>
       </div>
     </div>
     <div class="card-body">
@@ -421,7 +421,7 @@ document.querySelectorAll('#section-nav a').forEach(a => {
 });
 
 // ── Main loader ────────────────────────────────────────────────────────────
-let distChart, distLogMode = false;
+let distChart, distLogMode = true;
 let scatterChart = null;
 let scatterData = null;
 let scatterFilterMode = false;
@@ -458,7 +458,7 @@ async function init() {
   summaryData = summary;
   renderSummary(summary);
   distData = dist;
-  renderDistribution(dist, false);
+  renderDistribution(dist, true);
   scatterData = scatter;
   renderScatter(scatter, scatterFilterMode);
   deltaData = delta;
@@ -608,14 +608,19 @@ function renderDistribution(dist, logMode) {
     borderColor: V5_COLOR, borderWidth: 2, borderDash: [4,3],
     label: { content: `V5 med: ${v5med}`, display: true, position: 'end', color: V5_COLOR, font: { size: 10 }, backgroundColor: 'rgba(255,255,255,0.8)' },
   };
+
+  // Use {x, y} point format so the x-axis can be truly logarithmic
+  const xMin = logMode ? 0.001 : 0;
+  const v4pts = dist.bins.map((b, i) => ({ x: b === 0 ? 0.0001 : b, y: dist.v4[i] }));
+  const v5pts = dist.bins.map((b, i) => ({ x: b === 0 ? 0.0001 : b, y: dist.v5[i] }));
+
   if (distChart) distChart.destroy();
   distChart = new Chart(ctx, {
     type: 'line',
     data: {
-      labels: dist.bins.map(b => b.toFixed(2)),
       datasets: [
-        { label: 'EPSS V4', data: dist.v4, backgroundColor: V4_FILL, borderColor: V4_COLOR, borderWidth: 1.5, fill: true, pointRadius: 0, tension: 0.2, type: 'line' },
-        { label: 'EPSS V5 Beta', data: dist.v5, backgroundColor: V5_FILL, borderColor: V5_COLOR, borderWidth: 1.5, fill: true, pointRadius: 0, tension: 0.2, type: 'line' },
+        { label: 'EPSS V4', data: v4pts, backgroundColor: V4_FILL, borderColor: V4_COLOR, borderWidth: 1.5, fill: true, pointRadius: 0, tension: 0.2 },
+        { label: 'EPSS V5 Beta', data: v5pts, backgroundColor: V5_FILL, borderColor: V5_COLOR, borderWidth: 1.5, fill: true, pointRadius: 0, tension: 0.2 },
       ],
     },
     options: {
@@ -627,15 +632,24 @@ function renderDistribution(dist, logMode) {
         annotation: { annotations },
         tooltip: {
           callbacks: {
-            title: items => `Score bin: ${items[0].label}`,
-            label: item => ` ${item.dataset.label}: ${item.raw.toLocaleString()} CVEs`,
+            title: items => `Score bin: ${(+items[0].parsed.x).toFixed(3)}`,
+            label: item => ` ${item.dataset.label}: ${item.parsed.y.toLocaleString()} CVEs`,
           },
         },
       },
       scales: {
         x: {
-          title: { display: true, text: 'EPSS Score' },
-          ticks: { maxTicksLimit: 11, callback: (v, i) => dist.bins[i] !== undefined ? dist.bins[i].toFixed(1) : '' },
+          type: logMode ? 'logarithmic' : 'linear',
+          min: xMin,
+          max: 1,
+          title: { display: true, text: logMode ? 'EPSS Score (log scale)' : 'EPSS Score' },
+          ticks: {
+            callback: v => {
+              const nice = [0.001, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0,
+                            0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0];
+              return nice.includes(+v.toFixed(4)) ? v : null;
+            },
+          },
         },
         y: {
           type: logMode ? 'logarithmic' : 'linear',
