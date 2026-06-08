@@ -1211,6 +1211,8 @@ def main():
     args = ap.parse_args()
 
     date = args.date
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", date):
+        sys.exit(f"Invalid --date '{date}' (expected YYYY-MM-DD)")
     year = date.split("-")[0]
     cve_dir = Path(args.cve_dir)
     out_dir = Path(args.out_dir)
@@ -1505,6 +1507,10 @@ def trends_main():
     ap.add_argument("--cache-dir", default=".cache")
     ap.add_argument("--no-download", action="store_true")
     args = ap.parse_args()
+
+    bad = [d for d in args.dates if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", d)]
+    if bad:
+        sys.exit(f"Invalid --dates values (expected YYYY-MM-DD): {bad}")
 
     cache_dir = Path(args.cache_dir)
     out_dir = Path(args.out_dir)

@@ -1,17 +1,23 @@
 name: Build & Deploy EPSS Report
 
 on:
-  push:
-    branches: [main]
+  schedule:
+    # Daily at 18:00 UTC — after the observed beta-publish window (13:34–17:02 UTC).
+    - cron: "0 18 * * *"
   workflow_dispatch:
     inputs:
       date:
-        description: "Score date (YYYY-MM-DD)"
+        description: "Score date (YYYY-MM-DD). Leave blank to use the newest available."
         required: false
-        default: "2026-05-22"
+        default: ""
+  push:
+    branches: [main]
+    # Don't re-trigger when the workflow commits regenerated data back.
+    paths-ignore:
+      - "docs/data/**"
 
 permissions:
-  contents: read
+  contents: write   # commit regenerated data back to main (skip-guard baseline)
   pages: write
   id-token: write
 
@@ -22,12 +28,11 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      built: ${{ steps.decide.outputs.built }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
-
-      - name: Clone CVEProject/cvelistV5 (shallow)
-        run: git clone --depth 1 https://github.com/CVEProject/cvelistV5.git cvelistV5
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -35,21 +40,94 @@ jobs:
           python-version: "3.11"
           cache: pip
 
+      - name: Discover latest beta date
+        id: discover
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/latest_date.py
+
+      - name: Decide whether to build
+        id: decide
+        # Untrusted/derived values are passed via env (never interpolated directly
+        # into the shell) to avoid script injection.
+        env:
+          OVERRIDE: ${{ github.event.inputs.date }}
+          EVENT: ${{ github.event_name }}
+          CHANGED: ${{ steps.discover.outputs.changed }}
+          LATEST: ${{ steps.discover.outputs.latest }}
+        run: |
+          if [ -n "$OVERRIDE" ]; then
+            if ! printf '%s' "$OVERRIDE" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'; then
+              echo "Invalid date override: '$OVERRIDE' (expected YYYY-MM-DD)" >&2
+              exit 1
+            fi
+            echo "Manual date override: $OVERRIDE"
+            echo "date=$OVERRIDE" >> "$GITHUB_OUTPUT"
+            echo "built=true" >> "$GITHUB_OUTPUT"
+          elif [ "$EVENT" != "schedule" ] || [ "$CHANGED" = "true" ]; then
+            echo "Building for $LATEST"
+            echo "date=$LATEST" >> "$GITHUB_OUTPUT"
+            echo "built=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No new beta data since last build — skipping."
+            echo "built=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Install dependencies
+        if: steps.decide.outputs.built == 'true'
         run: pip install -r requirements.txt
 
-      - name: Run build pipeline
+      - name: Clone CVEProject/cvelistV5 (shallow)
+        if: steps.decide.outputs.built == 'true'
+        run: git clone --depth 1 https://github.com/CVEProject/cvelistV5.git cvelistV5
+
+      - name: Restore EPSS download cache
+        if: steps.decide.outputs.built == 'true'
+        uses: actions/cache@v4
+        with:
+          path: .cache
+          key: epss-cache-${{ steps.discover.outputs.latest }}
+          restore-keys: epss-cache-
+
+      - name: Build single-date report
+        if: steps.decide.outputs.built == 'true'
+        env:
+          DATE: ${{ steps.decide.outputs.date }}
+        run: python build.py --date "$DATE" --cve-dir ./cvelistV5
+
+      - name: Build trends
+        if: steps.decide.outputs.built == 'true'
+        env:
+          DATES: ${{ steps.discover.outputs.dates }}
+        # $DATES is intentionally UNQUOTED: argparse nargs="+" needs each date as a
+        # separate shell word. The values are our own YYYY-MM-DD strings (validated
+        # by scripts/latest_date.py's regex), so word-splitting here is safe.
+        run: python build.py --trends --dates $DATES --cve-dir ./cvelistV5
+
+      - name: Commit regenerated data
+        if: steps.decide.outputs.built == 'true' && github.event_name != 'push'
+        env:
+          DATE: ${{ steps.decide.outputs.date }}
         run: |
-          DATE="${{ github.event.inputs.date || '2026-05-22' }}"
-          python build.py --date "$DATE" --cve-dir ./cvelistV5
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/data
+          if git diff --cached --quiet; then
+            echo "No data changes to commit."
+          else
+            git commit -m "Auto-build EPSS report for $DATE [skip ci]"
+            git push
+          fi
 
       - name: Upload Pages artifact
+        if: steps.decide.outputs.built == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: docs/
 
   deploy:
     needs: build
+    if: needs.build.outputs.built == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
